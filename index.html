@@ -158,6 +158,11 @@ dialog::backdrop{background:rgba(8,20,26,.55)}
 @media (max-width:560px){.cpick{flex:1 1 100%}.cbtns{margin-left:0}}
 .pill.neutral{background:var(--surface-2);color:var(--muted)}
 .pill.transit{background:var(--accent-soft);color:var(--accent)}
+tr.gstart td{border-top:2px solid var(--line)}
+tr.subtot td{background:var(--surface-2);font-weight:600;border-bottom:2px solid var(--line)}
+tr.subtot td.lbl{font-weight:600}
+tr.subtot .cnt{font-weight:400;color:var(--muted);font-size:12.5px}
+td.cont{color:var(--muted);padding-left:24px}
 .toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;font-size:13.5px;border-radius:2px;z-index:10}
 @media (prefers-reduced-motion:no-preference){.bar-fill,.meter span{transition:width .4s ease}}
 </style>
@@ -297,7 +302,7 @@ dialog::backdrop{background:rgba(8,20,26,.55)}
         <thead><tr><th>Customer</th><th>Phone</th><th>Cargo</th><th class="r">Qty</th><th class="r">Charged</th><th class="r">Paid</th><th class="r">Balance</th><th>Status</th></tr></thead>
         <tbody id="t-cu"></tbody><tfoot id="f-cu"></tfoot>
       </table></div>
-      <p class="hint">Status is worked out from the amounts: nothing paid is Unpaid, some paid is Partial, fully paid is Paid.</p>
+      <p class="hint">Customers are listed A to Z. When someone brings more than one shipment, their entries are grouped with a total underneath. Start typing a name to pick an existing customer. Status is worked out from the amounts: nothing paid is Unpaid, some paid is Partial, fully paid is Paid.</p>
     </div>
   </section>
   </div>
@@ -315,6 +320,7 @@ dialog::backdrop{background:rgba(8,20,26,.55)}
 </dialog>
 <div class="toast" id="toast" hidden></div>
 <datalist id="dl-cat"></datalist>
+<datalist id="dl-cust"></datalist>
 
 <script>
 (function(){
@@ -370,8 +376,15 @@ function calc(){
   const cu=S.customers.map(c=>{const ch=n(c.charged),pd=n(c.paid);const bal=ch-pd;
     const st=ch>0&&pd>=ch?"Paid":pd>0?"Partial":"Unpaid";return {...c,ch,pd,bal,st}});
   const ch=cu.reduce((a,c)=>a+c.ch,0),pd=cu.reduce((a,c)=>a+c.pd,0);
-  return {total,pending,freight,cats,partners,paidAll,owe,cu,ch,pd,ar:ch-pd,qty:cu.reduce((a,c)=>a+n(c.qty),0)};
+  /* group entries by customer name (ignoring case and extra spaces), A to Z */
+  const gm=new Map();
+  [...cu].sort(byCreated).forEach(c=>{const k=custKey(c.name);if(!gm.has(k))gm.set(k,{name:String(c.name||"").trim(),rows:[]});gm.get(k).rows.push(c)});
+  const groups=[...gm.values()].map(g=>{const gch=g.rows.reduce((a,c)=>a+c.ch,0),gpd=g.rows.reduce((a,c)=>a+c.pd,0);
+    return {...g,ch:gch,pd:gpd,bal:gch-gpd,qty:g.rows.reduce((a,c)=>a+n(c.qty),0),st:gch>0&&gpd>=gch?"Paid":gpd>0?"Partial":"Unpaid"}})
+    .sort((a,b)=>a.name.localeCompare(b.name,undefined,{sensitivity:"base"}));
+  return {total,pending,freight,cats,partners,paidAll,owe,cu,groups,ch,pd,ar:ch-pd,qty:cu.reduce((a,c)=>a+n(c.qty),0)};
 }
+function custKey(name){return String(name||"").trim().replace(/\s+/g," ").toLowerCase()}
 const pill=(cls,t)=>`<span class="pill ${cls}">${esc(t)}</span>`;
 const emptyRow=(cols,t)=>`<tr class="empty"><td colspan="${cols}">${t}</td></tr>`;
 
@@ -385,7 +398,7 @@ function render(){
   $("k-owe").textContent=m(C.owe);
   $("k-owe-n").textContent=`across ${C.partners.filter(p=>p.bal>0.005).length} partner(s)`;
   $("k-ar").textContent=m(C.ar);$("k-ar").className="val"+(C.ar>0.005?" bad":"");
-  $("k-ar-n").textContent=`${C.cu.filter(c=>c.st!=="Paid").length} of ${C.cu.length} customers unpaid or partial`;
+  $("k-ar-n").textContent=`${C.groups.filter(g=>g.st!=="Paid").length} of ${C.groups.length} customers unpaid or partial`;
   $("o-split").textContent=`Freight & customs ${m(C.freight)} · local logistics ${m(C.total-C.freight)}`;
   const catRows=Object.entries(C.cats).sort((a,b)=>(b[1].paid+b[1].pend)-(a[1].paid+a[1].pend));
   const max=Math.max(1,...catRows.map(([,v])=>v.paid+v.pend));
@@ -397,7 +410,7 @@ function render(){
     return `<div class="pc"><span class="name">${esc(p.name)}</span><span class="owed">${p.bal>0.005?`owes ${m(p.bal)}`:p.bal<-0.005?`over by ${m(-p.bal)}`:"settled"}</span>
     <div class="meter"><span style="width:${pct}%"></span></div><span class="foot">${m(p.paid)} of ${m(p.target)} · ${Math.round(pct)}%</span></div>`}).join("")
     :`<p class="hint">No partners yet.</p>`;
-  $("n-rev").textContent=m(C.ch);$("n-rev-n").textContent=`${C.cu.length} customers · ${C.qty} items`;
+  $("n-rev").textContent=m(C.ch);$("n-rev-n").textContent=`${C.groups.length} customers · ${C.qty} items`;
   $("n-col").textContent=m(C.pd);$("n-col-n").textContent=C.ch?`${Math.round(C.pd/C.ch*1000)/10}% collected`:"";
   $("n-cost").textContent=m(C.total);
   const net=C.ch-C.total;$("n-net").textContent=(net<0?"−":"")+m(Math.abs(net));$("n-net").className="val "+(net<0?"bad":"good");
@@ -420,9 +433,12 @@ function render(){
 
   /* customers */
   $("cu-ch").textContent=m(C.ch);$("cu-pd").textContent=m(C.pd);$("cu-pd-n").textContent=C.ch?`${(C.pd/C.ch*100).toFixed(1)}% collected`:"";
-  $("cu-bal").textContent=m(C.ar);$("cu-n").textContent=C.cu.length;$("cu-n-n").textContent=`${C.qty} item${C.qty===1?"":"s"} shipping`;
-  const cus=[...C.cu].sort(byCreated);
-  $("t-cu").innerHTML=cus.length?cus.map(c=>`<tr class="click" data-col="customers" data-id="${esc(c.id)}"><td>${esc(c.name)}</td><td class="dim num" style="white-space:nowrap">${esc(c.phone)}</td><td>${esc(c.cargo)}</td><td class="r">${n(c.qty)}</td><td class="r">${m(c.ch)}</td><td class="r">${m(c.pd)}</td><td class="r">${m(c.bal)}</td><td>${pill(c.st.toLowerCase(),c.st)}</td></tr>`).join(""):emptyRow(8,"No customers yet.");
+  $("cu-bal").textContent=m(C.ar);$("cu-n").textContent=C.groups.length;$("cu-n-n").textContent=`${C.qty} item${C.qty===1?"":"s"} shipping`+(C.cu.length>C.groups.length?` · ${C.cu.length} entries`:"");
+  const row=(c,first,multi,prevPhone)=>`<tr class="click${multi&&first?" gstart":""}" data-col="customers" data-id="${esc(c.id)}">${first?`<td>${esc(c.name)}</td>`:`<td class="cont" aria-label="${esc(c.name)}">↳</td>`}<td class="dim num" style="white-space:nowrap">${c.phone&&c.phone!==prevPhone?esc(c.phone):""}</td><td>${esc(c.cargo)}</td><td class="r">${n(c.qty)}</td><td class="r">${m(c.ch)}</td><td class="r">${m(c.pd)}</td><td class="r">${m(c.bal)}</td><td>${pill(c.st.toLowerCase(),c.st)}</td></tr>`;
+  $("t-cu").innerHTML=C.groups.length?C.groups.map(g=>{
+    if(g.rows.length===1)return row(g.rows[0],true,false,"");
+    let prev="";const body=g.rows.map((c,i)=>{const h=row(c,i===0,true,prev);prev=c.phone||prev;return h}).join("");
+    return body+`<tr class="subtot"><td colspan="3" class="lbl">Total for ${esc(g.name)} <span class="cnt">· ${g.rows.length} entries</span></td><td class="r">${g.qty}</td><td class="r">${m(g.ch)}</td><td class="r">${m(g.pd)}</td><td class="r">${m(g.bal)}</td><td>${pill(g.st.toLowerCase(),g.st)}</td></tr>`}).join(""):emptyRow(8,"No customers yet.");
   $("f-cu").innerHTML=`<tr><td colspan="3">Total cargo receivables</td><td class="r">${C.qty}</td><td class="r">${m(C.ch)}</td><td class="r">${m(C.pd)}</td><td class="r">${m(C.ar)}</td><td>${C.ch?(C.pd/C.ch*100).toFixed(1):"0.0"}%</td></tr>`;
 }
 function renderCalc(C){
@@ -447,7 +463,7 @@ const F={
     ["partner","Partner","partner",1],["amount","Amount (USD)","money",1],["item","Paid for","text",1,"wide"],
     ["vendor","Vendor / payee","text"],["category","Category","cat"],["date","Date","date"]]},
   customers:{title:"customer",fields:[
-    ["name","Customer name","text",1],["phone","Phone","text"],["cargo","Cargo / items","text",0,"wide"],
+    ["name","Customer name","cust",1],["phone","Phone","text"],["cargo","Cargo / items","text",0,"wide"],
     ["qty","Quantity","int"],["date","Date booked","date"],["charged","Amount charged","money",1],["paid","Amount paid","money"]]},
   partners:{title:"partner",fields:[["name","Name","text",1],["split","Split weight (%)","money",1]]},
   containers:{title:"container",fields:[["name","Container name","text",1,"wide"],["status","Status","select",1,"",["Loading","In transit","Arrived","Closed"]],["date","Ship date","date"]]}
@@ -462,6 +478,7 @@ function openForm(col,id){
     let input;
     if(type==="select")input=`<select id="fld-${k}">${opts.map(o=>`<option${o===v?" selected":""}>${esc(o)}</option>`).join("")}</select>`;
     else if(type==="partner")input=`<select id="fld-${k}">${S.partners.map(p=>`<option${p.name===v?" selected":""}>${esc(p.name)}</option>`).join("")}</select>`;
+    else if(type==="cust")input=`<input id="fld-${k}" list="dl-cust" value="${esc(v)}" autocomplete="off">`;
     else if(type==="cat")input=`<input id="fld-${k}" list="dl-cat" value="${esc(v)}" autocomplete="off">`;
     else if(type==="money"||type==="int")input=`<input id="fld-${k}" class="num" type="number" min="0" step="${type==="int"?1:0.01}" inputmode="decimal" value="${esc(v)}">`;
     else input=`<input id="fld-${k}" type="${type==="date"?"date":"text"}" value="${esc(v)}">`;
@@ -469,6 +486,12 @@ function openForm(col,id){
   const del=$("dlgDel");del.hidden=!rec;del.classList.remove("armed");del.textContent="Delete";
   $("dlgSave").disabled=!canWrite;del.disabled=!canWrite;
   $("dlg").showModal();
+  if(col==="customers"){
+    const seen=new Map();[...ALL.customers].reverse().forEach(c=>{const k=custKey(c.name);if(k&&!seen.has(k))seen.set(k,c)});
+    $("dl-cust").innerHTML=[...seen.values()].map(c=>String(c.name).trim()).sort((a,b)=>a.localeCompare(b)).map(nm=>`<option value="${esc(nm)}">`).join("");
+    /* picking a returning customer fills in their phone number */
+    $("fld-name").addEventListener("change",()=>{const hit=seen.get(custKey($("fld-name").value));const ph=$("fld-phone");if(hit&&!ph.value.trim()&&hit.phone)ph.value=hit.phone});
+  }
   const first=$("dlgBody").querySelector("input,select");first&&first.focus();
 }
 function closeForm(){$("dlg").close();editing=null}
@@ -482,7 +505,7 @@ $("frm").addEventListener("submit",async e=>{
   const {col,id,prevName}=editing;const def=F[col];const data={};const err=$("dlgErr");
   for(const [k,label,type,req] of def.fields){let v=$("fld-"+k).value.trim();
     if(req&&v===""){err.textContent=`${label} is required.`;err.hidden=false;return}
-    data[k]=(type==="money"||type==="int")?(v===""?0:n(v)):v}
+    data[k]=(type==="money"||type==="int")?(v===""?0:n(v)):type==="cust"?v.replace(/\s+/g," "):v}
   if(col==="customers"&&data.paid>data.charged){err.textContent="Amount paid is more than the amount charged. Check the numbers.";err.hidden=false;return}
   if(col==="partners"&&S.partners.some(p=>p.name.toLowerCase()===data.name.toLowerCase()&&p.id!==id)){err.textContent="A partner with that name already exists.";err.hidden=false;return}
   if(col==="containers"&&CONTS.some(c=>c.name.toLowerCase()===data.name.toLowerCase()&&c.id!==id)){err.textContent="A container with that name already exists.";err.hidden=false;return}
