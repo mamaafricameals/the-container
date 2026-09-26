@@ -150,6 +150,14 @@ dialog::backdrop{background:rgba(8,20,26,.55)}
 .login p{margin:0;color:var(--muted);font-size:14px}
 .hdr-right{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
 .linkbtn{appearance:none;border:0;background:none;color:var(--accent);font:600 13px var(--sans);cursor:pointer;padding:4px 0;text-decoration:underline}
+.cbar{display:flex;flex-wrap:wrap;align-items:flex-end;gap:12px 16px;padding-block:4px 18px}
+.cpick{flex:0 1 320px;min-width:0}
+.cpick select{font-weight:600}
+.cmeta{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--muted);padding-bottom:9px}
+.cbtns{display:flex;gap:8px;margin-left:auto}
+@media (max-width:560px){.cpick{flex:1 1 100%}.cbtns{margin-left:0}}
+.pill.neutral{background:var(--surface-2);color:var(--muted)}
+.pill.transit{background:var(--accent-soft);color:var(--accent)}
 .toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;font-size:13.5px;border-radius:2px;z-index:10}
 @media (prefers-reduced-motion:no-preference){.bar-fill,.meter span{transition:width .4s ease}}
 </style>
@@ -178,6 +186,11 @@ dialog::backdrop{background:rgba(8,20,26,.55)}
   </form>
 
   <div id="app" hidden>
+  <div class="cbar">
+    <label class="f cpick">Container<select id="cSel"></select></label>
+    <span class="cmeta" id="cMeta"></span>
+    <div class="cbtns"><button class="btn ghost" id="cEdit" type="button">Edit container</button><button class="btn" id="cNew" type="button">New container</button></div>
+  </div>
   <nav class="tabs" role="tablist" id="tabs">
     <button role="tab" data-tab="overview" aria-selected="true">Overview</button>
     <button role="tab" data-tab="expenses" aria-selected="false">Expenses</button>
@@ -276,7 +289,7 @@ dialog::backdrop{background:rgba(8,20,26,.55)}
       <div class="kpi"><span class="lbl">Charged</span><span class="val" id="cu-ch">—</span></div>
       <div class="kpi"><span class="lbl">Collected</span><span class="val good" id="cu-pd">—</span><span class="note" id="cu-pd-n"></span></div>
       <div class="kpi"><span class="lbl">Outstanding</span><span class="val bad" id="cu-bal">—</span></div>
-      <div class="kpi"><span class="lbl">Customers · items</span><span class="val" id="cu-n">—</span></div>
+      <div class="kpi"><span class="lbl">Customers</span><span class="val" id="cu-n">—</span><span class="note" id="cu-n-n"></span></div>
     </div>
     <div>
       <div class="sec-head"><h2>Cargo billing</h2><button class="btn" data-add="customers">Add customer</button></div>
@@ -309,6 +322,12 @@ const CATS=["Ocean Freight","Customs & Duties","Drayage & Trucking","Equipment R
 const FREIGHT=new Set(["Ocean Freight","Customs & Duties"]);
 const S={expenses:[],payments:[],customers:[],partners:[],settings:{}};
 let ready=false, canWrite=true, sb=null, userEmail="";
+/* containers: each shipment keeps its own expenses, payments, customers and planner; partners are shared */
+const ALL={expenses:[],payments:[],customers:[]};let SET={};let CONTS=[{id:"c1",name:"Container 1",status:"",date:""}];
+let CUR="c1";try{CUR=localStorage.getItem("tc-container")||"c1"}catch(e){}
+const contOf=r=>r.container||"c1";
+const planKey=()=>CUR==="c1"?"main":"plan-"+CUR;
+const STATUS_CLS={"Loading":"pending","In transit":"transit","Arrived":"paid","Closed":"neutral"};
 async function q(p){const {data,error}=await p;if(error)throw error;return data}
 const strip=r=>{const {id,created,...rest}=r;return rest};
 async function saveRec(col,id,data){
@@ -401,7 +420,7 @@ function render(){
 
   /* customers */
   $("cu-ch").textContent=m(C.ch);$("cu-pd").textContent=m(C.pd);$("cu-pd-n").textContent=C.ch?`${(C.pd/C.ch*100).toFixed(1)}% collected`:"";
-  $("cu-bal").textContent=m(C.ar);$("cu-n").textContent=`${C.cu.length} · ${C.qty}`;
+  $("cu-bal").textContent=m(C.ar);$("cu-n").textContent=C.cu.length;$("cu-n-n").textContent=`${C.qty} item${C.qty===1?"":"s"} shipping`;
   const cus=[...C.cu].sort(byCreated);
   $("t-cu").innerHTML=cus.length?cus.map(c=>`<tr class="click" data-col="customers" data-id="${esc(c.id)}"><td>${esc(c.name)}</td><td class="dim num" style="white-space:nowrap">${esc(c.phone)}</td><td>${esc(c.cargo)}</td><td class="r">${n(c.qty)}</td><td class="r">${m(c.ch)}</td><td class="r">${m(c.pd)}</td><td class="r">${m(c.bal)}</td><td>${pill(c.st.toLowerCase(),c.st)}</td></tr>`).join(""):emptyRow(8,"No customers yet.");
   $("f-cu").innerHTML=`<tr><td colspan="3">Total cargo receivables</td><td class="r">${C.qty}</td><td class="r">${m(C.ch)}</td><td class="r">${m(C.pd)}</td><td class="r">${m(C.ar)}</td><td>${C.ch?(C.pd/C.ch*100).toFixed(1):"0.0"}%</td></tr>`;
@@ -416,7 +435,7 @@ function renderCalc(C){
 }
 let calcTimer;
 function calcChanged(){renderCalc();if(!ready||!canWrite)return;clearTimeout(calcTimer);
-  calcTimer=setTimeout(()=>{q(sb.from("records").upsert({id:"main",collection:"settings",data:{nextAmount:n($("c-amt").value),nextDesc:$("c-desc").value}})).catch(()=>{})},1000)}
+  calcTimer=setTimeout(()=>{q(sb.from("records").upsert({id:planKey(),collection:"settings",data:{nextAmount:n($("c-amt").value),nextDesc:$("c-desc").value}})).catch(()=>{})},1000)}
 $("c-amt").addEventListener("input",calcChanged);$("c-desc").addEventListener("input",calcChanged);
 
 /* forms */
@@ -430,7 +449,8 @@ const F={
   customers:{title:"customer",fields:[
     ["name","Customer name","text",1],["phone","Phone","text"],["cargo","Cargo / items","text",0,"wide"],
     ["qty","Quantity","int"],["date","Date booked","date"],["charged","Amount charged","money",1],["paid","Amount paid","money"]]},
-  partners:{title:"partner",fields:[["name","Name","text",1],["split","Split weight (%)","money",1]]}
+  partners:{title:"partner",fields:[["name","Name","text",1],["split","Split weight (%)","money",1]]},
+  containers:{title:"container",fields:[["name","Container name","text",1,"wide"],["status","Status","select",1,"",["Loading","In transit","Arrived","Closed"]],["date","Ship date","date"]]}
 };
 let editing=null;
 function openForm(col,id){
@@ -438,7 +458,7 @@ function openForm(col,id){
   const def=F[col];const rec=id?S[col].find(r=>r.id===id):null;editing={col,id:rec?rec.id:null,prevName:rec&&col==="partners"?rec.name:null};
   $("dlgTitle").textContent=(rec?"Edit ":"Add ")+def.title;
   $("dlgBody").innerHTML=def.fields.map(([k,label,type,req,cls,opts])=>{
-    let v=rec?rec[k]:(type==="date"?today():k==="status"?"Paid":k==="split"?"33.33":"");v=v??"";
+    let v=rec?rec[k]:(type==="date"?today():k==="status"?(col==="containers"?"Loading":"Paid"):k==="split"?"33.33":(col==="containers"&&k==="name")?`Container ${CONTS.length+1}`:"");v=v??"";
     let input;
     if(type==="select")input=`<select id="fld-${k}">${opts.map(o=>`<option${o===v?" selected":""}>${esc(o)}</option>`).join("")}</select>`;
     else if(type==="partner")input=`<select id="fld-${k}">${S.partners.map(p=>`<option${p.name===v?" selected":""}>${esc(p.name)}</option>`).join("")}</select>`;
@@ -465,17 +485,31 @@ $("frm").addEventListener("submit",async e=>{
     data[k]=(type==="money"||type==="int")?(v===""?0:n(v)):v}
   if(col==="customers"&&data.paid>data.charged){err.textContent="Amount paid is more than the amount charged. Check the numbers.";err.hidden=false;return}
   if(col==="partners"&&S.partners.some(p=>p.name.toLowerCase()===data.name.toLowerCase()&&p.id!==id)){err.textContent="A partner with that name already exists.";err.hidden=false;return}
+  if(col==="containers"&&CONTS.some(c=>c.name.toLowerCase()===data.name.toLowerCase()&&c.id!==id)){err.textContent="A container with that name already exists.";err.hidden=false;return}
   const btn=$("dlgSave");btn.disabled=true;
   try{
+    if(col==="containers"){
+      const cid=id||"c"+Date.now().toString(36);
+      const list=id?CONTS.map(c=>c.id===id?{...c,...data}:c):[...CONTS,{id:cid,...data}];
+      await q(sb.from("records").upsert({id:"containers",collection:"settings",data:{list}}));
+      if(!id){CUR=cid;try{localStorage.setItem("tc-container",CUR)}catch(e){}}
+      await load(true);closeForm();toast(id?"Container updated":`${data.name} created`);return;
+    }
+    if(col!=="partners"){const rec=id?S[col].find(r=>r.id===id):null;data.container=rec?contOf(rec):CUR}
     await saveRec(col,id,data);
-    if(col==="partners"&&prevName&&prevName!==data.name){for(const p of S.payments.filter(x=>x.partner===prevName))await saveRec("payments",p.id,{...strip(p),partner:data.name})}
+    if(col==="partners"&&prevName&&prevName!==data.name){for(const p of ALL.payments.filter(x=>x.partner===prevName))await saveRec("payments",p.id,{...strip(p),partner:data.name})}
     await load();closeForm();toast("Saved");
   }catch(ex){handleWriteError(ex,err)}finally{btn.disabled=false}
 });
 $("dlgDel").addEventListener("click",async()=>{
   const b=$("dlgDel");if(!b.classList.contains("armed")){b.classList.add("armed");b.textContent="Tap again to delete";return}
   const {col,id}=editing;
-  if(col==="partners"){const nm=S.partners.find(p=>p.id===id)?.name;if(S.payments.some(x=>x.partner===nm)){const err=$("dlgErr");err.textContent="This partner has logged payments. Delete or reassign those first.";err.hidden=false;return}}
+  if(col==="containers"){const err=$("dlgErr");
+    if(CONTS.length<2){err.textContent="This is the only container, so it can't be deleted.";err.hidden=false;return}
+    if(["expenses","payments","customers"].some(k=>ALL[k].some(r=>contOf(r)===id))){err.textContent="This container still has records. Delete its expenses, payments and customers first.";err.hidden=false;return}
+    try{await q(sb.from("records").upsert({id:"containers",collection:"settings",data:{list:CONTS.filter(c=>c.id!==id)}}));CUR=CONTS.find(c=>c.id!==id).id;await load(true);closeForm();toast("Container deleted")}catch(ex){handleWriteError(ex,err)}
+    return}
+  if(col==="partners"){const nm=S.partners.find(p=>p.id===id)?.name;if(ALL.payments.some(x=>x.partner===nm)){const err=$("dlgErr");err.textContent="This partner has logged payments. Delete or reassign those first.";err.hidden=false;return}}
   try{await q(sb.from("records").delete().eq("id",id));await load();closeForm();toast("Deleted")}catch(ex){handleWriteError(ex,$("dlgErr"))}
 });
 function handleWriteError(ex,el){
@@ -489,19 +523,37 @@ function handleWriteError(ex,el){
 render();
 
 /* data: one "records" table in Supabase; only signed-in partners can read or write it */
-async function load(){
+async function load(force){
   const rows=await q(sb.from("records").select("id,collection,data,created_at").order("created_at"));
-  const g={expenses:[],payments:[],customers:[],partners:[]};let settings={};
-  rows.forEach((r,i)=>{if(r.collection==="settings"){if(r.id==="main")settings=r.data||{};return}
+  const g={expenses:[],payments:[],customers:[],partners:[]};const set={};
+  rows.forEach((r,i)=>{if(r.collection==="settings"){set[r.id]=r.data||{};return}
     if(g[r.collection])g[r.collection].push({...r.data,id:r.id,created:i})});
-  Object.assign(S,g);S.settings=settings;
-  const amtEl=$("c-amt"),descEl=$("c-desc");
-  if(!ready||document.activeElement!==amtEl)amtEl.value=settings.nextAmount??"";
-  if(!ready||document.activeElement!==descEl)descEl.value=settings.nextDesc??"";
-  ready=true;render();
+  ALL.expenses=g.expenses;ALL.payments=g.payments;ALL.customers=g.customers;S.partners=g.partners;SET=set;
+  const list=set.containers&&Array.isArray(set.containers.list)&&set.containers.list.length?set.containers.list:[{id:"c1",name:"Container 1",status:"",date:""}];
+  CONTS=list;
+  applyView(force||!ready);
   const t=new Date().toLocaleTimeString([],{hour:"numeric",minute:"2-digit"});
   sync("on",`Synced at ${t}`+(userEmail?` · ${userEmail}`:""));
 }
+function applyView(force){
+  if(!CONTS.some(c=>c.id===CUR))CUR=CONTS[0].id;
+  try{localStorage.setItem("tc-container",CUR)}catch(e){}
+  S.expenses=ALL.expenses.filter(r=>contOf(r)===CUR);
+  S.payments=ALL.payments.filter(r=>contOf(r)===CUR);
+  S.customers=ALL.customers.filter(r=>contOf(r)===CUR);
+  S.containers=CONTS;S.settings=SET[planKey()]||{};
+  const amtEl=$("c-amt"),descEl=$("c-desc");
+  if(force||document.activeElement!==amtEl)amtEl.value=S.settings.nextAmount??"";
+  if(force||document.activeElement!==descEl)descEl.value=S.settings.nextDesc??"";
+  const sel=$("cSel");sel.innerHTML=CONTS.map(c=>`<option value="${esc(c.id)}"${c.id===CUR?" selected":""}>${esc(c.name)}</option>`).join("");
+  const c=CONTS.find(x=>x.id===CUR);
+  $("cMeta").innerHTML=(c.status?`<span class="pill ${STATUS_CLS[c.status]||"neutral"}">${esc(c.status)}</span>`:"")+(c.date?`<span>Ships ${fmtDate(c.date)}</span>`:"");
+  $("cNew").disabled=$("cEdit").disabled=!canWrite;
+  ready=true;render();
+}
+$("cSel").addEventListener("change",e=>{CUR=e.target.value;applyView(true)});
+$("cNew").addEventListener("click",()=>openForm("containers"));
+$("cEdit").addEventListener("click",()=>openForm("containers",CUR));
 let reloadTimer;const soon=()=>{clearTimeout(reloadTimer);reloadTimer=setTimeout(()=>{if(!$("dlg").open)load().catch(()=>{})},600)};
 function showLogin(){ready=false;$("app").hidden=true;$("signout").hidden=true;$("login").hidden=false;sync("","Signed out");$("li-email").focus()}
 let live=false;
