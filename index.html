@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>The Container</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
+<script src="config.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --bg:#E9EDEE; --surface:#FFFFFF; --surface-2:#F4F6F7; --ink:#12242C; --muted:#5A6A71; --line:#D3DADD;
+  --accent:#1D5B78; --accent-ink:#FFFFFF; --accent-soft:#DCE9EF; --stencil:#E8A512;
+  --good:#1F7A4C; --good-soft:#DDF0E5; --warn:#9A6200; --warn-soft:#FBEBC8; --bad:#B23A2E; --bad-soft:#F7DEDA;
+  --bar:#1D5B78; --bar-2:#8FB3C4;
+  --display:"Big Shoulders Display", "Arial Narrow", Impact, sans-serif;
+  --sans:"IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono:"IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --bg:#0E171B; --surface:#152228; --surface-2:#1A2A31; --ink:#E4ECEF; --muted:#93A5AD; --line:#2A3D45;
+    --accent:#6FB3D2; --accent-ink:#08161C; --accent-soft:#1B3845; --stencil:#F2B72E;
+    --good:#5CC48D; --good-soft:#15352A; --warn:#E6B34A; --warn-soft:#3A2E12; --bad:#EE8074; --bad-soft:#3E1D1A;
+    --bar:#6FB3D2; --bar-2:#3C6576;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#0E171B; --surface:#152228; --surface-2:#1A2A31; --ink:#E4ECEF; --muted:#93A5AD; --line:#2A3D45;
+  --accent:#6FB3D2; --accent-ink:#08161C; --accent-soft:#1B3845; --stencil:#F2B72E;
+  --good:#5CC48D; --good-soft:#15352A; --warn:#E6B34A; --warn-soft:#3A2E12; --bad:#EE8074; --bad-soft:#3E1D1A;
+  --bar:#6FB3D2; --bar-2:#3C6576;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html{-webkit-text-size-adjust:100%}
+body{background:var(--bg);color:var(--ink);font:15px/1.5 var(--sans);margin:0}
+.wrap{max-width:1120px;margin:0 auto;padding-inline:20px;padding-block:0 64px}
+.num,td.r,th.r{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* header */
+header.top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px 24px;padding-block:28px 18px}
+.brand{display:flex;align-items:center;gap:14px}
+.plate{font-family:var(--display);font-weight:800;font-size:13px;letter-spacing:.14em;color:var(--ink);background:var(--stencil);padding:4px 8px;line-height:1.1;text-align:center;color:#1B1500}
+.plate small{display:block;font-size:10px;letter-spacing:.2em}
+h1{font-family:var(--display);font-weight:800;font-size:clamp(34px,6vw,48px);letter-spacing:.02em;line-height:.95;margin:0;text-transform:uppercase}
+.sub{color:var(--muted);margin:4px 0 0;font-size:14px}
+.sync{font-size:12.5px;color:var(--muted);display:flex;align-items:center;gap:8px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--muted)}
+.dot.on{background:var(--good)} .dot.off{background:var(--bad)}
+
+nav.tabs{display:flex;gap:2px;border-bottom:2px solid var(--ink);overflow-x:auto;scrollbar-width:none}
+nav.tabs button{appearance:none;border:0;background:transparent;color:var(--muted);font:600 13px var(--sans);letter-spacing:.08em;text-transform:uppercase;padding:12px 16px 10px;cursor:pointer;white-space:nowrap;border-radius:0}
+nav.tabs button[aria-selected="true"]{background:var(--ink);color:var(--bg)}
+nav.tabs button:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+section.view{display:flex;flex-direction:column;gap:28px;padding-top:24px}
+h2{font-family:var(--display);font-weight:700;font-size:22px;letter-spacing:.04em;text-transform:uppercase;margin:0;text-wrap:balance}
+.sec-head{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:8px 16px;margin-bottom:10px}
+.sec-head p{margin:0;color:var(--muted);font-size:13.5px}
+
+/* KPI strip */
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));background:var(--surface);border:1px solid var(--line)}
+.kpi{padding:16px 18px;border-left:1px solid var(--line);display:flex;flex-direction:column;gap:4px}
+.kpi:first-child{border-left:0}
+.kpi .lbl{font-size:11px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.kpi .val{font-family:var(--mono);font-size:clamp(20px,2.6vw,26px);font-weight:500;letter-spacing:-.01em}
+.kpi .note{font-size:12.5px;color:var(--muted)}
+.val.bad{color:var(--bad)} .val.good{color:var(--good)}
+@media (max-width:760px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.kpi:nth-child(3){border-left:0}.kpi:nth-child(n+3){border-top:1px solid var(--line)}}
+
+.grid2{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:28px}
+@media (max-width:860px){.grid2{grid-template-columns:minmax(0,1fr)}}
+
+.panel{background:var(--surface);border:1px solid var(--line);padding:18px}
+
+/* bars */
+.bars{display:flex;flex-direction:column;gap:12px}
+.bar-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 12px;font-size:13.5px}
+.bar-row .amt{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.bar-track{grid-column:1/-1;height:10px;background:var(--surface-2);position:relative}
+.bar-fill{position:absolute;inset:0 auto 0 0;background:var(--bar)}
+.bar-fill.pend{background:repeating-linear-gradient(135deg,var(--bar) 0 5px,var(--bar-2) 5px 10px)}
+.legend{display:flex;gap:16px;font-size:12px;color:var(--muted);margin-top:14px;flex-wrap:wrap}
+.legend i{display:inline-block;width:14px;height:10px;vertical-align:-1px;margin-right:6px;background:var(--bar)}
+.legend i.pend{background:repeating-linear-gradient(135deg,var(--bar) 0 5px,var(--bar-2) 5px 10px)}
+
+/* partner cards */
+.partners{display:flex;flex-direction:column;gap:14px}
+.pc{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 12px;align-items:baseline}
+.pc .name{font-weight:600}
+.pc .owed{font-family:var(--mono);font-size:13px}
+.meter{grid-column:1/-1;height:8px;background:var(--surface-2);position:relative}
+.meter span{position:absolute;inset:0 auto 0 0;background:var(--good)}
+.pc .foot{grid-column:1/-1;font-size:12.5px;color:var(--muted);font-family:var(--mono)}
+
+/* tables */
+.tbl-wrap{overflow-x:auto;background:var(--surface);border:1px solid var(--line)}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th{font-size:11px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);background:var(--surface-2);white-space:nowrap}
+td{padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+tbody tr:last-child td{border-bottom:0}
+tbody tr.click{cursor:pointer}
+tbody tr.click:hover td{background:var(--surface-2)}
+td.r,th.r{text-align:right;white-space:nowrap}
+td.dim{color:var(--muted)}
+tfoot td{font-weight:600;border-top:2px solid var(--ink);border-bottom:0;background:var(--surface-2)}
+.empty td{color:var(--muted);text-align:center;padding:24px}
+
+.pill{display:inline-block;font-size:11.5px;font-weight:600;letter-spacing:.04em;padding:2px 8px;border-radius:999px;white-space:nowrap}
+.pill.paid{background:var(--good-soft);color:var(--good)}
+.pill.pending,.pill.partial{background:var(--warn-soft);color:var(--warn)}
+.pill.unpaid,.pill.due{background:var(--bad-soft);color:var(--bad)}
+.pill.over{background:var(--accent-soft);color:var(--accent)}
+
+/* buttons & forms */
+.btn{appearance:none;border:1px solid var(--ink);background:var(--ink);color:var(--bg);font:600 13px var(--sans);padding:8px 14px;cursor:pointer;border-radius:2px}
+.btn.ghost{background:transparent;color:var(--ink)}
+.btn.danger{background:transparent;color:var(--bad);border-color:var(--bad)}
+.btn.danger.armed{background:var(--bad);color:#fff}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+
+.calc{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:flex-end;margin-bottom:14px}
+label.f{display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+label.f input,label.f select{font:400 15px var(--sans);color:var(--ink);background:var(--surface);border:1px solid var(--line);padding:8px 10px;border-radius:2px;min-width:0;width:100%;text-transform:none;letter-spacing:0}
+label.f input.num{font-family:var(--mono)}
+.calc label.f{flex:1 1 200px}
+
+dialog{border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:0;width:min(520px,calc(100vw - 32px));border-radius:2px}
+dialog::backdrop{background:rgba(8,20,26,.55)}
+.dlg-head{display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid var(--line)}
+.dlg-head h3{font-family:var(--display);font-size:20px;letter-spacing:.04em;text-transform:uppercase;margin:0}
+.x{appearance:none;border:0;background:transparent;color:var(--muted);font-size:22px;cursor:pointer;line-height:1;padding:4px 8px}
+.dlg-body{display:grid;grid-template-columns:1fr 1fr;gap:14px;padding:18px 20px}
+.dlg-body .wide{grid-column:1/-1}
+@media (max-width:480px){.dlg-body{grid-template-columns:1fr}}
+.dlg-foot{display:flex;gap:10px;justify-content:space-between;align-items:center;padding:14px 20px;border-top:1px solid var(--line);flex-wrap:wrap}
+.dlg-foot .right{display:flex;gap:10px;margin-left:auto}
+.err{color:var(--bad);font-size:13px;grid-column:1/-1;margin:0}
+
+.banner{background:var(--warn-soft);color:var(--warn);padding:12px 16px;font-size:14px;border:1px solid var(--line)}
+.hint{font-size:12.5px;color:var(--muted);margin:10px 0 0}
+.login{max-width:380px;margin:48px auto 0;background:var(--surface);border:1px solid var(--line);padding:24px;display:flex;flex-direction:column;gap:14px}
+.login h2{font-size:24px}
+.login p{margin:0;color:var(--muted);font-size:14px}
+.hdr-right{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.linkbtn{appearance:none;border:0;background:none;color:var(--accent);font:600 13px var(--sans);cursor:pointer;padding:4px 0;text-decoration:underline}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;font-size:13.5px;border-radius:2px;z-index:10}
+@media (prefers-reduced-motion:no-preference){.bar-fill,.meter span{transition:width .4s ease}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <div class="plate" aria-hidden="true">TCNU<small>40' HC</small></div>
+      <div>
+        <h1>The Container</h1>
+        <p class="sub">Shipping costs, partner contributions and customer cargo in one place</p>
+      </div>
+    </div>
+    <div class="hdr-right"><div class="sync" id="sync"><span class="dot" id="syncDot"></span><span id="syncTxt">Connecting…</span></div><button class="linkbtn" id="signout" hidden>Sign out</button></div>
+  </header>
+
+  <form class="login" id="login" hidden novalidate>
+    <h2>Partner sign-in</h2>
+    <p>This tracker is private to the partners of The Container.</p>
+    <label class="f">Email<input id="li-email" type="email" autocomplete="username" required></label>
+    <label class="f">Password<input id="li-pass" type="password" autocomplete="current-password" required></label>
+    <p class="err" id="li-err" hidden></p>
+    <button class="btn" type="submit" id="li-btn">Sign in</button>
+    <p class="hint" style="margin:0">Forgot your password? Ask Saikou to reset it.</p>
+  </form>
+
+  <div id="app" hidden>
+  <nav class="tabs" role="tablist" id="tabs">
+    <button role="tab" data-tab="overview" aria-selected="true">Overview</button>
+    <button role="tab" data-tab="expenses" aria-selected="false">Expenses</button>
+    <button role="tab" data-tab="partners" aria-selected="false">Partners</button>
+    <button role="tab" data-tab="customers" aria-selected="false">Customers</button>
+  </nav>
+
+  <div id="banner" class="banner" hidden style="margin-top:20px"></div>
+
+  <!-- OVERVIEW -->
+  <section class="view" id="v-overview">
+    <div class="kpis">
+      <div class="kpi"><span class="lbl">Total spent</span><span class="val" id="k-total">—</span><span class="note" id="k-total-n"></span></div>
+      <div class="kpi"><span class="lbl">Paid in by partners</span><span class="val" id="k-paid">—</span><span class="note" id="k-paid-n"></span></div>
+      <div class="kpi"><span class="lbl">Partners still owe</span><span class="val bad" id="k-owe">—</span><span class="note" id="k-owe-n"></span></div>
+      <div class="kpi"><span class="lbl">Customer balances due</span><span class="val" id="k-ar">—</span><span class="note" id="k-ar-n"></span></div>
+    </div>
+    <div class="grid2">
+      <div>
+        <div class="sec-head"><h2>Where the money went</h2><p id="o-split"></p></div>
+        <div class="panel"><div class="bars" id="o-bars"></div>
+          <div class="legend"><span><i></i>Paid</span><span><i class="pend"></i>Pending</span></div>
+        </div>
+      </div>
+      <div>
+        <div class="sec-head"><h2>Partner balances</h2><p>Paid toward each equal share</p></div>
+        <div class="panel"><div class="partners" id="o-partners"></div></div>
+      </div>
+    </div>
+    <div>
+      <div class="sec-head"><h2>Net position</h2><p>Customer charges against container costs</p></div>
+      <div class="kpis">
+        <div class="kpi"><span class="lbl">Charged to customers</span><span class="val" id="n-rev">—</span><span class="note" id="n-rev-n"></span></div>
+        <div class="kpi"><span class="lbl">Collected</span><span class="val" id="n-col">—</span><span class="note" id="n-col-n"></span></div>
+        <div class="kpi"><span class="lbl">Container costs</span><span class="val" id="n-cost">—</span><span class="note">All logged expenses</span></div>
+        <div class="kpi"><span class="lbl">Net (charged − costs)</span><span class="val" id="n-net">—</span><span class="note" id="n-net-n"></span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- EXPENSES -->
+  <section class="view" id="v-expenses" hidden>
+    <div>
+      <div class="sec-head"><h2>Expense log</h2><button class="btn" data-add="expenses">Add expense</button></div>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>Date</th><th>Expense</th><th>Vendor / payee</th><th>Category</th><th>Status</th><th class="r">Amount</th></tr></thead>
+        <tbody id="t-exp"></tbody><tfoot id="f-exp"></tfoot>
+      </table></div>
+      <p class="hint">Tap a row to edit or delete it.</p>
+    </div>
+    <div>
+      <div class="sec-head"><h2>By category</h2></div>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>Category</th><th>Group</th><th class="r">Subtotal</th><th class="r">Share</th></tr></thead>
+        <tbody id="t-cat"></tbody><tfoot id="f-cat"></tfoot>
+      </table></div>
+    </div>
+  </section>
+
+  <!-- PARTNERS -->
+  <section class="view" id="v-partners" hidden>
+    <div>
+      <div class="sec-head"><h2>Partner equity</h2><button class="btn ghost" data-add="partners">Add partner</button></div>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>Partner</th><th class="r">Split</th><th class="r">Target share</th><th class="r">Paid</th><th class="r">Balance</th><th>Status</th></tr></thead>
+        <tbody id="t-eq"></tbody><tfoot id="f-eq"></tfoot>
+      </table></div>
+      <p class="hint">Target share = total expenses × split. Tap a partner to change their name or split.</p>
+    </div>
+    <div>
+      <div class="sec-head"><h2>Payments ledger</h2><button class="btn" data-add="payments">Log payment</button></div>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>Date</th><th>Partner</th><th>Paid for</th><th>Vendor / payee</th><th>Category</th><th class="r">Amount</th></tr></thead>
+        <tbody id="t-pay"></tbody><tfoot id="f-pay"></tfoot>
+      </table></div>
+    </div>
+    <div>
+      <div class="sec-head"><h2>Next payment planner</h2><p>How much each partner should send if a new expense comes in</p></div>
+      <div class="panel">
+        <div class="calc">
+          <label class="f">Upcoming expense<input id="c-amt" class="num" type="number" min="0" step="0.01" inputmode="decimal"></label>
+          <label class="f" style="flex:2 1 280px">What it's for<input id="c-desc" type="text"></label>
+        </div>
+        <div class="tbl-wrap" style="border:0"><table>
+          <thead><tr><th>Partner</th><th class="r">Share of new expense</th><th class="r">Current balance</th><th class="r">Total to send</th></tr></thead>
+          <tbody id="t-calc"></tbody><tfoot id="f-calc"></tfoot>
+        </table></div>
+        <p class="hint">The planner is a what-if. Once the expense is actually billed, add it on the Expenses tab and the balances update on their own.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- CUSTOMERS -->
+  <section class="view" id="v-customers" hidden>
+    <div class="kpis">
+      <div class="kpi"><span class="lbl">Charged</span><span class="val" id="cu-ch">—</span></div>
+      <div class="kpi"><span class="lbl">Collected</span><span class="val good" id="cu-pd">—</span><span class="note" id="cu-pd-n"></span></div>
+      <div class="kpi"><span class="lbl">Outstanding</span><span class="val bad" id="cu-bal">—</span></div>
+      <div class="kpi"><span class="lbl">Customers · items</span><span class="val" id="cu-n">—</span></div>
+    </div>
+    <div>
+      <div class="sec-head"><h2>Cargo billing</h2><button class="btn" data-add="customers">Add customer</button></div>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>Customer</th><th>Phone</th><th>Cargo</th><th class="r">Qty</th><th class="r">Charged</th><th class="r">Paid</th><th class="r">Balance</th><th>Status</th></tr></thead>
+        <tbody id="t-cu"></tbody><tfoot id="f-cu"></tfoot>
+      </table></div>
+      <p class="hint">Status is worked out from the amounts: nothing paid is Unpaid, some paid is Partial, fully paid is Paid.</p>
+    </div>
+  </section>
+  </div>
+</div>
+
+<dialog id="dlg">
+  <form id="frm" method="dialog" novalidate>
+    <div class="dlg-head"><h3 id="dlgTitle">Edit</h3><button type="button" class="x" id="dlgX" aria-label="Close">×</button></div>
+    <div class="dlg-body" id="dlgBody"></div>
+    <div class="dlg-foot">
+      <button type="button" class="btn danger" id="dlgDel" hidden>Delete</button>
+      <div class="right"><button type="button" class="btn ghost" id="dlgCancel">Cancel</button><button type="submit" class="btn" id="dlgSave">Save</button></div>
+    </div>
+  </form>
+</dialog>
+<div class="toast" id="toast" hidden></div>
+<datalist id="dl-cat"></datalist>
+
+<script>
+(function(){
+const CATS=["Ocean Freight","Customs & Duties","Drayage & Trucking","Equipment Rental","Fuel & Transit","Towing & Roadside"];
+const FREIGHT=new Set(["Ocean Freight","Customs & Duties"]);
+const S={expenses:[],payments:[],customers:[],partners:[],settings:{}};
+let ready=false, canWrite=true, sb=null, userEmail="";
+async function q(p){const {data,error}=await p;if(error)throw error;return data}
+const strip=r=>{const {id,created,...rest}=r;return rest};
+async function saveRec(col,id,data){
+  return q(id?sb.from("records").update({data}).eq("id",id):sb.from("records").insert({collection:col,data}))}
+const $=id=>document.getElementById(id);
+const usd=new Intl.NumberFormat("en-US",{style:"currency",currency:"USD"});
+const m=v=>usd.format(Math.round((+v||0)*100)/100);
+const n=v=>{const x=parseFloat(v);return isFinite(x)?x:0};
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const fmtDate=d=>{if(!d)return"—";const t=new Date(d+"T00:00:00");return isNaN(t)?esc(d):t.toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"})};
+const today=()=>new Date().toISOString().slice(0,10);
+const byCreated=(a,b)=>(a.created||0)-(b.created||0);
+
+function toast(t){const el=$("toast");el.textContent=t;el.hidden=false;clearTimeout(toast._t);toast._t=setTimeout(()=>el.hidden=true,2200)}
+function sync(state,txt){$("syncDot").className="dot "+(state||"");$("syncTxt").textContent=txt}
+
+/* tabs */
+const TABS=["overview","expenses","partners","customers"];
+function showTab(t){if(!TABS.includes(t))t="overview";
+  document.querySelectorAll("#tabs button").forEach(b=>b.setAttribute("aria-selected",b.dataset.tab===t));
+  TABS.forEach(x=>$("v-"+x).hidden=x!==t);
+  try{localStorage.setItem("tc-tab",t)}catch(e){}}
+$("tabs").addEventListener("click",e=>{const b=e.target.closest("button[data-tab]");if(b)showTab(b.dataset.tab)});
+let start=(location.hash||"").slice(1);if(!TABS.includes(start)){try{start=localStorage.getItem("tc-tab")||""}catch(e){}}
+showTab(start);
+$("dl-cat").innerHTML=CATS.map(c=>`<option value="${esc(c)}">`).join("");
+
+/* calculations */
+function calc(){
+  const exp=S.expenses, total=exp.reduce((a,e)=>a+n(e.amount),0);
+  const pending=exp.filter(e=>e.status==="Pending").reduce((a,e)=>a+n(e.amount),0);
+  const freight=exp.filter(e=>FREIGHT.has(e.category)).reduce((a,e)=>a+n(e.amount),0);
+  const cats={};exp.forEach(e=>{const c=e.category||"Other";cats[c]=cats[c]||{paid:0,pend:0};cats[c][e.status==="Pending"?"pend":"paid"]+=n(e.amount)});
+  const splitSum=S.partners.reduce((a,p)=>a+n(p.split),0)||1;
+  const partners=S.partners.map(p=>{const frac=n(p.split)/splitSum;const target=total*frac;
+    const paid=S.payments.filter(x=>x.partner===p.name).reduce((a,x)=>a+n(x.amount),0);
+    return {...p,frac,target,paid,bal:target-paid}});
+  const paidAll=S.payments.reduce((a,x)=>a+n(x.amount),0);
+  const owe=partners.reduce((a,p)=>a+Math.max(0,p.bal),0);
+  const cu=S.customers.map(c=>{const ch=n(c.charged),pd=n(c.paid);const bal=ch-pd;
+    const st=ch>0&&pd>=ch?"Paid":pd>0?"Partial":"Unpaid";return {...c,ch,pd,bal,st}});
+  const ch=cu.reduce((a,c)=>a+c.ch,0),pd=cu.reduce((a,c)=>a+c.pd,0);
+  return {total,pending,freight,cats,partners,paidAll,owe,cu,ch,pd,ar:ch-pd,qty:cu.reduce((a,c)=>a+n(c.qty),0)};
+}
+const pill=(cls,t)=>`<span class="pill ${cls}">${esc(t)}</span>`;
+const emptyRow=(cols,t)=>`<tr class="empty"><td colspan="${cols}">${t}</td></tr>`;
+
+function render(){
+  const C=calc();
+  /* overview */
+  $("k-total").textContent=m(C.total);
+  $("k-total-n").textContent=`${S.expenses.length} expenses · ${m(C.pending)} pending`;
+  $("k-paid").textContent=m(C.paidAll);
+  $("k-paid-n").textContent=C.total?`${Math.round(C.paidAll/C.total*1000)/10}% of total costs`:"";
+  $("k-owe").textContent=m(C.owe);
+  $("k-owe-n").textContent=`across ${C.partners.filter(p=>p.bal>0.005).length} partner(s)`;
+  $("k-ar").textContent=m(C.ar);$("k-ar").className="val"+(C.ar>0.005?" bad":"");
+  $("k-ar-n").textContent=`${C.cu.filter(c=>c.st!=="Paid").length} of ${C.cu.length} customers unpaid or partial`;
+  $("o-split").textContent=`Freight & customs ${m(C.freight)} · local logistics ${m(C.total-C.freight)}`;
+  const catRows=Object.entries(C.cats).sort((a,b)=>(b[1].paid+b[1].pend)-(a[1].paid+a[1].pend));
+  const max=Math.max(1,...catRows.map(([,v])=>v.paid+v.pend));
+  $("o-bars").innerHTML=catRows.length?catRows.map(([k,v])=>{const t=v.paid+v.pend;
+    return `<div class="bar-row"><span>${esc(k)}</span><span class="amt">${m(t)}</span>
+    <div class="bar-track"><div class="bar-fill" style="width:${v.paid/max*100}%"></div><div class="bar-fill pend" style="left:${v.paid/max*100}%;width:${v.pend/max*100}%"></div></div></div>`}).join("")
+    :`<p class="hint">No expenses logged yet.</p>`;
+  $("o-partners").innerHTML=C.partners.length?C.partners.map(p=>{const pct=p.target>0?Math.min(100,p.paid/p.target*100):0;
+    return `<div class="pc"><span class="name">${esc(p.name)}</span><span class="owed">${p.bal>0.005?`owes ${m(p.bal)}`:p.bal<-0.005?`over by ${m(-p.bal)}`:"settled"}</span>
+    <div class="meter"><span style="width:${pct}%"></span></div><span class="foot">${m(p.paid)} of ${m(p.target)} · ${Math.round(pct)}%</span></div>`}).join("")
+    :`<p class="hint">No partners yet.</p>`;
+  $("n-rev").textContent=m(C.ch);$("n-rev-n").textContent=`${C.cu.length} customers · ${C.qty} items`;
+  $("n-col").textContent=m(C.pd);$("n-col-n").textContent=C.ch?`${Math.round(C.pd/C.ch*1000)/10}% collected`:"";
+  $("n-cost").textContent=m(C.total);
+  const net=C.ch-C.total;$("n-net").textContent=(net<0?"−":"")+m(Math.abs(net));$("n-net").className="val "+(net<0?"bad":"good");
+  $("n-net-n").textContent=net<0?`${m(-net)} more in charges to break even`:"Costs covered";
+
+  /* expenses */
+  const ex=[...S.expenses].sort(byCreated);
+  $("t-exp").innerHTML=ex.length?ex.map(e=>`<tr class="click" data-col="expenses" data-id="${esc(e.id)}"><td class="dim">${fmtDate(e.date)}</td><td>${esc(e.item)}</td><td class="dim">${esc(e.vendor)}</td><td>${esc(e.category)}</td><td>${pill(e.status==="Pending"?"pending":"paid",e.status||"Paid")}</td><td class="r">${m(e.amount)}</td></tr>`).join(""):emptyRow(6,"No expenses yet. Add the first one.");
+  $("f-exp").innerHTML=`<tr><td colspan="5">Total logged expenses</td><td class="r">${m(C.total)}</td></tr>`;
+  $("t-cat").innerHTML=catRows.length?catRows.map(([k,v])=>{const t=v.paid+v.pend;return `<tr><td>${esc(k)}</td><td class="dim">${FREIGHT.has(k)?"Freight & customs":"Local logistics"}</td><td class="r">${m(t)}</td><td class="r">${C.total?(t/C.total*100).toFixed(1):"0.0"}%</td></tr>`}).join(""):emptyRow(4,"—");
+  $("f-cat").innerHTML=`<tr><td colspan="2">Total</td><td class="r">${m(C.total)}</td><td class="r">100.0%</td></tr>`;
+
+  /* partners */
+  $("t-eq").innerHTML=C.partners.length?C.partners.map(p=>`<tr class="click" data-col="partners" data-id="${esc(p.id)}"><td>${esc(p.name)}</td><td class="r">${(p.frac*100).toFixed(1)}%</td><td class="r">${m(p.target)}</td><td class="r">${m(p.paid)}</td><td class="r">${m(p.bal)}</td><td>${p.bal>0.005?pill("due","Balance due"):p.bal<-0.005?pill("over","Overpaid"):pill("paid","Settled")}</td></tr>`).join(""):emptyRow(6,"No partners yet.");
+  $("f-eq").innerHTML=`<tr><td>Total</td><td class="r">100.0%</td><td class="r">${m(C.total)}</td><td class="r">${m(C.paidAll)}</td><td class="r">${m(C.total-C.paidAll)}</td><td></td></tr>`;
+  const pays=[...S.payments].sort(byCreated);
+  $("t-pay").innerHTML=pays.length?pays.map(x=>`<tr class="click" data-col="payments" data-id="${esc(x.id)}"><td class="dim">${fmtDate(x.date)}</td><td>${esc(x.partner)}</td><td>${esc(x.item)}</td><td class="dim">${esc(x.vendor)}</td><td>${esc(x.category)}</td><td class="r">${m(x.amount)}</td></tr>`).join(""):emptyRow(6,"No partner payments yet.");
+  $("f-pay").innerHTML=`<tr><td colspan="5">Total paid by partners · ${pays.length} payments</td><td class="r">${m(C.paidAll)}</td></tr>`;
+  renderCalc(C);
+
+  /* customers */
+  $("cu-ch").textContent=m(C.ch);$("cu-pd").textContent=m(C.pd);$("cu-pd-n").textContent=C.ch?`${(C.pd/C.ch*100).toFixed(1)}% collected`:"";
+  $("cu-bal").textContent=m(C.ar);$("cu-n").textContent=`${C.cu.length} · ${C.qty}`;
+  const cus=[...C.cu].sort(byCreated);
+  $("t-cu").innerHTML=cus.length?cus.map(c=>`<tr class="click" data-col="customers" data-id="${esc(c.id)}"><td>${esc(c.name)}</td><td class="dim num" style="white-space:nowrap">${esc(c.phone)}</td><td>${esc(c.cargo)}</td><td class="r">${n(c.qty)}</td><td class="r">${m(c.ch)}</td><td class="r">${m(c.pd)}</td><td class="r">${m(c.bal)}</td><td>${pill(c.st.toLowerCase(),c.st)}</td></tr>`).join(""):emptyRow(8,"No customers yet.");
+  $("f-cu").innerHTML=`<tr><td colspan="3">Total cargo receivables</td><td class="r">${C.qty}</td><td class="r">${m(C.ch)}</td><td class="r">${m(C.pd)}</td><td class="r">${m(C.ar)}</td><td>${C.ch?(C.pd/C.ch*100).toFixed(1):"0.0"}%</td></tr>`;
+}
+function renderCalc(C){
+  C=C||calc();
+  const amt=n($("c-amt").value);
+  $("t-calc").innerHTML=C.partners.length?C.partners.map(p=>{const share=amt*p.frac;const tot=share+Math.max(0,p.bal);
+    return `<tr><td>${esc(p.name)}</td><td class="r">${m(share)}</td><td class="r">${m(p.bal)}</td><td class="r"><strong>${m(tot)}</strong></td></tr>`}).join(""):emptyRow(4,"Add partners first.");
+  const prior=C.partners.reduce((a,p)=>a+Math.max(0,p.bal),0);
+  $("f-calc").innerHTML=`<tr><td>Total capital needed</td><td class="r">${m(amt)}</td><td class="r">${m(prior)}</td><td class="r">${m(amt+prior)}</td></tr>`;
+}
+let calcTimer;
+function calcChanged(){renderCalc();if(!ready||!canWrite)return;clearTimeout(calcTimer);
+  calcTimer=setTimeout(()=>{q(sb.from("records").upsert({id:"main",collection:"settings",data:{nextAmount:n($("c-amt").value),nextDesc:$("c-desc").value}})).catch(()=>{})},1000)}
+$("c-amt").addEventListener("input",calcChanged);$("c-desc").addEventListener("input",calcChanged);
+
+/* forms */
+const F={
+  expenses:{title:"expense",fields:[
+    ["item","Expense","text",1,"wide"],["vendor","Vendor / payee","text"],["category","Category","cat",1],
+    ["amount","Amount (USD)","money",1],["status","Status","select",1,"",["Paid","Pending"]],["date","Date","date"]]},
+  payments:{title:"partner payment",fields:[
+    ["partner","Partner","partner",1],["amount","Amount (USD)","money",1],["item","Paid for","text",1,"wide"],
+    ["vendor","Vendor / payee","text"],["category","Category","cat"],["date","Date","date"]]},
+  customers:{title:"customer",fields:[
+    ["name","Customer name","text",1],["phone","Phone","text"],["cargo","Cargo / items","text",0,"wide"],
+    ["qty","Quantity","int"],["date","Date booked","date"],["charged","Amount charged","money",1],["paid","Amount paid","money"]]},
+  partners:{title:"partner",fields:[["name","Name","text",1],["split","Split weight (%)","money",1]]}
+};
+let editing=null;
+function openForm(col,id){
+  if(!ready){toast("Still loading. Try again in a moment.");return}
+  const def=F[col];const rec=id?S[col].find(r=>r.id===id):null;editing={col,id:rec?rec.id:null,prevName:rec&&col==="partners"?rec.name:null};
+  $("dlgTitle").textContent=(rec?"Edit ":"Add ")+def.title;
+  $("dlgBody").innerHTML=def.fields.map(([k,label,type,req,cls,opts])=>{
+    let v=rec?rec[k]:(type==="date"?today():k==="status"?"Paid":k==="split"?"33.33":"");v=v??"";
+    let input;
+    if(type==="select")input=`<select id="fld-${k}">${opts.map(o=>`<option${o===v?" selected":""}>${esc(o)}</option>`).join("")}</select>`;
+    else if(type==="partner")input=`<select id="fld-${k}">${S.partners.map(p=>`<option${p.name===v?" selected":""}>${esc(p.name)}</option>`).join("")}</select>`;
+    else if(type==="cat")input=`<input id="fld-${k}" list="dl-cat" value="${esc(v)}" autocomplete="off">`;
+    else if(type==="money"||type==="int")input=`<input id="fld-${k}" class="num" type="number" min="0" step="${type==="int"?1:0.01}" inputmode="decimal" value="${esc(v)}">`;
+    else input=`<input id="fld-${k}" type="${type==="date"?"date":"text"}" value="${esc(v)}">`;
+    return `<label class="f ${cls||""}">${esc(label)}${req?" *":""}${input}</label>`}).join("")+`<p class="err" id="dlgErr" hidden></p>`;
+  const del=$("dlgDel");del.hidden=!rec;del.classList.remove("armed");del.textContent="Delete";
+  $("dlgSave").disabled=!canWrite;del.disabled=!canWrite;
+  $("dlg").showModal();
+  const first=$("dlgBody").querySelector("input,select");first&&first.focus();
+}
+function closeForm(){$("dlg").close();editing=null}
+$("dlgX").onclick=closeForm;$("dlgCancel").onclick=closeForm;
+document.querySelectorAll("[data-add]").forEach(b=>b.addEventListener("click",()=>{
+  if(b.dataset.add==="payments"&&!S.partners.length){toast("Add a partner first");return}openForm(b.dataset.add)}));
+document.addEventListener("click",e=>{const tr=e.target.closest("tr.click");if(tr)openForm(tr.dataset.col,tr.dataset.id)});
+
+$("frm").addEventListener("submit",async e=>{
+  e.preventDefault();if(!editing)return;
+  const {col,id,prevName}=editing;const def=F[col];const data={};const err=$("dlgErr");
+  for(const [k,label,type,req] of def.fields){let v=$("fld-"+k).value.trim();
+    if(req&&v===""){err.textContent=`${label} is required.`;err.hidden=false;return}
+    data[k]=(type==="money"||type==="int")?(v===""?0:n(v)):v}
+  if(col==="customers"&&data.paid>data.charged){err.textContent="Amount paid is more than the amount charged. Check the numbers.";err.hidden=false;return}
+  if(col==="partners"&&S.partners.some(p=>p.name.toLowerCase()===data.name.toLowerCase()&&p.id!==id)){err.textContent="A partner with that name already exists.";err.hidden=false;return}
+  const btn=$("dlgSave");btn.disabled=true;
+  try{
+    await saveRec(col,id,data);
+    if(col==="partners"&&prevName&&prevName!==data.name){for(const p of S.payments.filter(x=>x.partner===prevName))await saveRec("payments",p.id,{...strip(p),partner:data.name})}
+    await load();closeForm();toast("Saved");
+  }catch(ex){handleWriteError(ex,err)}finally{btn.disabled=false}
+});
+$("dlgDel").addEventListener("click",async()=>{
+  const b=$("dlgDel");if(!b.classList.contains("armed")){b.classList.add("armed");b.textContent="Tap again to delete";return}
+  const {col,id}=editing;
+  if(col==="partners"){const nm=S.partners.find(p=>p.id===id)?.name;if(S.payments.some(x=>x.partner===nm)){const err=$("dlgErr");err.textContent="This partner has logged payments. Delete or reassign those first.";err.hidden=false;return}}
+  try{await q(sb.from("records").delete().eq("id",id));await load();closeForm();toast("Deleted")}catch(ex){handleWriteError(ex,$("dlgErr"))}
+});
+function handleWriteError(ex,el){
+  const msg=String(ex&&ex.message||ex||"");
+  if(/jwt|expired|not authenticated/i.test(msg)){el.textContent="Your sign-in has expired. Sign out, sign back in, then try again.";}
+  else if(/row-level security|permission/i.test(msg)){canWrite=false;el.textContent="Your account isn't allowed to change records. Ask Saikou to check your access.";}
+  else el.textContent="Couldn't save right now. Check your connection and try again.";
+  el.hidden=false;
+}
+
+render();
+
+/* data: one "records" table in Supabase; only signed-in partners can read or write it */
+async function load(){
+  const rows=await q(sb.from("records").select("id,collection,data,created_at").order("created_at"));
+  const g={expenses:[],payments:[],customers:[],partners:[]};let settings={};
+  rows.forEach((r,i)=>{if(r.collection==="settings"){if(r.id==="main")settings=r.data||{};return}
+    if(g[r.collection])g[r.collection].push({...r.data,id:r.id,created:i})});
+  Object.assign(S,g);S.settings=settings;
+  const amtEl=$("c-amt"),descEl=$("c-desc");
+  if(!ready||document.activeElement!==amtEl)amtEl.value=settings.nextAmount??"";
+  if(!ready||document.activeElement!==descEl)descEl.value=settings.nextDesc??"";
+  ready=true;render();
+  const t=new Date().toLocaleTimeString([],{hour:"numeric",minute:"2-digit"});
+  sync("on",`Synced at ${t}`+(userEmail?` · ${userEmail}`:""));
+}
+let reloadTimer;const soon=()=>{clearTimeout(reloadTimer);reloadTimer=setTimeout(()=>{if(!$("dlg").open)load().catch(()=>{})},600)};
+function showLogin(){ready=false;$("app").hidden=true;$("signout").hidden=true;$("login").hidden=false;sync("","Signed out");$("li-email").focus()}
+let live=false;
+async function enter(session){
+  userEmail=session.user.email||"";
+  $("login").hidden=true;$("app").hidden=false;$("signout").hidden=false;sync("","Loading…");
+  try{await load()}catch(e){sync("off","Couldn't load the data");const b=$("banner");b.textContent="The tracker couldn't reach the database. Check your connection and reload the page.";b.hidden=false}
+  if(!live){live=true;
+    sb.channel("records").on("postgres_changes",{event:"*",schema:"public",table:"records"},soon).subscribe();
+    setInterval(()=>{if(ready&&document.visibilityState==="visible"&&!$("dlg").open&&document.activeElement?.tagName!=="INPUT")load().catch(()=>{})},60000)}
+}
+$("login").addEventListener("submit",async e=>{
+  e.preventDefault();const err=$("li-err"),btn=$("li-btn");err.hidden=true;
+  const email=$("li-email").value.trim(),password=$("li-pass").value;
+  if(!email||!password){err.textContent="Enter your email and password.";err.hidden=false;return}
+  btn.disabled=true;btn.textContent="Signing in…";
+  const {data,error}=await sb.auth.signInWithPassword({email,password});
+  btn.disabled=false;btn.textContent="Sign in";
+  if(error){err.textContent=/invalid/i.test(error.message)?"That email and password don't match. Check them and try again.":"Couldn't sign in. Check your connection and try again.";err.hidden=false;return}
+  $("li-pass").value="";enter(data.session);
+});
+$("signout").addEventListener("click",async()=>{await sb.auth.signOut();showLogin()});
+
+(async()=>{
+  const cfg=window.TC_CONFIG||{};
+  if(!window.supabase||!cfg.supabaseUrl||/YOUR-/.test(cfg.supabaseUrl+cfg.supabaseAnonKey)){
+    sync("off","Setup not finished");const b=$("banner");b.textContent="Setup isn't finished yet: add your Supabase project URL and anon key to config.js, then upload the site again.";b.hidden=false;b.style.marginTop="20px";$("app").hidden=false;return}
+  sb=supabase.createClient(cfg.supabaseUrl,cfg.supabaseAnonKey);
+  sb.auth.onAuthStateChange((ev)=>{if(ev==="SIGNED_OUT")showLogin()});
+  const {data:{session}}=await sb.auth.getSession();
+  session?enter(session):showLogin();
+})();
+})();
+</script>
+</body>
+</html>
