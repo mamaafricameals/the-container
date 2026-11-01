@@ -163,6 +163,12 @@ tr.subtot td{background:var(--surface-2);font-weight:600;border-bottom:2px solid
 tr.subtot td.lbl{font-weight:600}
 tr.subtot .cnt{font-weight:400;color:var(--muted);font-size:12.5px}
 td.cont{color:var(--muted);padding-left:24px}
+.btn.sm{padding:4px 10px;font-size:12px}
+a.btn{text-decoration:none;display:inline-flex;align-items:center}
+a.btn.off{opacity:.45;cursor:not-allowed}
+label.f textarea{font:400 14px/1.45 var(--sans);color:var(--ink);background:var(--surface);border:1px solid var(--line);padding:8px 10px;border-radius:2px;width:100%;resize:vertical;text-transform:none;letter-spacing:0}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.dlg-foot .right{flex-wrap:wrap}
 .toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;font-size:13.5px;border-radius:2px;z-index:10}
 @media (prefers-reduced-motion:no-preference){.bar-fill,.meter span{transition:width .4s ease}}
 </style>
@@ -299,7 +305,7 @@ td.cont{color:var(--muted);padding-left:24px}
     <div>
       <div class="sec-head"><h2>Cargo billing</h2><button class="btn" data-add="customers">Add customer</button></div>
       <div class="tbl-wrap"><table>
-        <thead><tr><th>Customer</th><th>Phone</th><th>Cargo</th><th class="r">Qty</th><th class="r">Charged</th><th class="r">Paid</th><th class="r">Balance</th><th>Status</th></tr></thead>
+        <thead><tr><th>Customer</th><th>Phone</th><th>Cargo</th><th class="r">Qty</th><th class="r">Charged</th><th class="r">Paid</th><th class="r">Balance</th><th>Status</th><th><span class="sr">Send bill</span></th></tr></thead>
         <tbody id="t-cu"></tbody><tfoot id="f-cu"></tfoot>
       </table></div>
       <p class="hint">Customers are listed A to Z. When someone brings more than one shipment, their entries are grouped with a total underneath. Start typing a name to pick an existing customer. Status is worked out from the amounts: nothing paid is Unpaid, some paid is Partial, fully paid is Paid.</p>
@@ -307,6 +313,23 @@ td.cont{color:var(--muted);padding-left:24px}
   </section>
   </div>
 </div>
+
+<dialog id="sendDlg">
+  <div class="dlg-head"><h3 id="sendTitle">Send bill</h3><button type="button" class="x" id="sendX" aria-label="Close">×</button></div>
+  <div class="dlg-body">
+    <label class="f wide">Phone number<input id="sendPhone" type="tel" autocomplete="off"></label>
+    <label class="f wide">Message<textarea id="sendMsg" rows="12"></textarea></label>
+    <p class="hint wide" id="sendNote" style="margin:0"></p>
+  </div>
+  <div class="dlg-foot">
+    <button type="button" class="btn ghost" id="sendClose">Close</button>
+    <div class="right">
+      <button type="button" class="btn ghost" id="sendCopy">Copy</button>
+      <a class="btn ghost" id="sendSms" href="#">Text message</a>
+      <a class="btn" id="sendWa" href="#" target="_blank" rel="noopener">WhatsApp</a>
+    </div>
+  </div>
+</dialog>
 
 <dialog id="dlg">
   <form id="frm" method="dialog" novalidate>
@@ -327,7 +350,7 @@ td.cont{color:var(--muted);padding-left:24px}
 const CATS=["Ocean Freight","Customs & Duties","Drayage & Trucking","Equipment Rental","Fuel & Transit","Towing & Roadside"];
 const FREIGHT=new Set(["Ocean Freight","Customs & Duties"]);
 const S={expenses:[],payments:[],customers:[],partners:[],settings:{}};
-let ready=false, canWrite=true, sb=null, userEmail="";
+let ready=false, canWrite=true, sb=null, userEmail="", lastGroups=[];
 /* containers: each shipment keeps its own expenses, payments, customers and planner; partners are shared */
 const ALL={expenses:[],payments:[],customers:[]};let SET={};let CONTS=[{id:"c1",name:"Container 1",status:"",date:""}];
 let CUR="c1";try{CUR=localStorage.getItem("tc-container")||"c1"}catch(e){}
@@ -380,7 +403,7 @@ function calc(){
   const gm=new Map();
   [...cu].sort(byCreated).forEach(c=>{const k=custKey(c.name);if(!gm.has(k))gm.set(k,{name:String(c.name||"").trim(),rows:[]});gm.get(k).rows.push(c)});
   const groups=[...gm.values()].map(g=>{const gch=g.rows.reduce((a,c)=>a+c.ch,0),gpd=g.rows.reduce((a,c)=>a+c.pd,0);
-    return {...g,ch:gch,pd:gpd,bal:gch-gpd,qty:g.rows.reduce((a,c)=>a+n(c.qty),0),st:gch>0&&gpd>=gch?"Paid":gpd>0?"Partial":"Unpaid"}})
+    return {...g,key:custKey(g.name),ch:gch,pd:gpd,bal:gch-gpd,qty:g.rows.reduce((a,c)=>a+n(c.qty),0),st:gch>0&&gpd>=gch?"Paid":gpd>0?"Partial":"Unpaid"}})
     .sort((a,b)=>a.name.localeCompare(b.name,undefined,{sensitivity:"base"}));
   return {total,pending,freight,cats,partners,paidAll,owe,cu,groups,ch,pd,ar:ch-pd,qty:cu.reduce((a,c)=>a+n(c.qty),0)};
 }
@@ -434,12 +457,13 @@ function render(){
   /* customers */
   $("cu-ch").textContent=m(C.ch);$("cu-pd").textContent=m(C.pd);$("cu-pd-n").textContent=C.ch?`${(C.pd/C.ch*100).toFixed(1)}% collected`:"";
   $("cu-bal").textContent=m(C.ar);$("cu-n").textContent=C.groups.length;$("cu-n-n").textContent=`${C.qty} item${C.qty===1?"":"s"} shipping`+(C.cu.length>C.groups.length?` · ${C.cu.length} entries`:"");
-  const row=(c,first,multi,prevPhone)=>`<tr class="click${multi&&first?" gstart":""}" data-col="customers" data-id="${esc(c.id)}">${first?`<td>${esc(c.name)}</td>`:`<td class="cont" aria-label="${esc(c.name)}">↳</td>`}<td class="dim num" style="white-space:nowrap">${c.phone&&c.phone!==prevPhone?esc(c.phone):""}</td><td>${esc(c.cargo)}</td><td class="r">${n(c.qty)}</td><td class="r">${m(c.ch)}</td><td class="r">${m(c.pd)}</td><td class="r">${m(c.bal)}</td><td>${pill(c.st.toLowerCase(),c.st)}</td></tr>`;
+  const row=(c,first,multi,prevPhone,send)=>`<tr class="click${multi&&first?" gstart":""}" data-col="customers" data-id="${esc(c.id)}">${first?`<td>${esc(c.name)}</td>`:`<td class="cont" aria-label="${esc(c.name)}">↳</td>`}<td class="dim num" style="white-space:nowrap">${c.phone&&c.phone!==prevPhone?esc(c.phone):""}</td><td>${esc(c.cargo)}</td><td class="r">${n(c.qty)}</td><td class="r">${m(c.ch)}</td><td class="r">${m(c.pd)}</td><td class="r">${m(c.bal)}</td><td>${pill(c.st.toLowerCase(),c.st)}</td><td>${send?sendBtn(send):""}</td></tr>`;
+  lastGroups=C.groups;
   $("t-cu").innerHTML=C.groups.length?C.groups.map(g=>{
-    if(g.rows.length===1)return row(g.rows[0],true,false,"");
+    if(g.rows.length===1)return row(g.rows[0],true,false,"",g.key);
     let prev="";const body=g.rows.map((c,i)=>{const h=row(c,i===0,true,prev);prev=c.phone||prev;return h}).join("");
-    return body+`<tr class="subtot"><td colspan="3" class="lbl">Total for ${esc(g.name)} <span class="cnt">· ${g.rows.length} entries</span></td><td class="r">${g.qty}</td><td class="r">${m(g.ch)}</td><td class="r">${m(g.pd)}</td><td class="r">${m(g.bal)}</td><td>${pill(g.st.toLowerCase(),g.st)}</td></tr>`}).join(""):emptyRow(8,"No customers yet.");
-  $("f-cu").innerHTML=`<tr><td colspan="3">Total cargo receivables</td><td class="r">${C.qty}</td><td class="r">${m(C.ch)}</td><td class="r">${m(C.pd)}</td><td class="r">${m(C.ar)}</td><td>${C.ch?(C.pd/C.ch*100).toFixed(1):"0.0"}%</td></tr>`;
+    return body+`<tr class="subtot"><td colspan="3" class="lbl">Total for ${esc(g.name)} <span class="cnt">· ${g.rows.length} entries</span></td><td class="r">${g.qty}</td><td class="r">${m(g.ch)}</td><td class="r">${m(g.pd)}</td><td class="r">${m(g.bal)}</td><td>${pill(g.st.toLowerCase(),g.st)}</td><td>${sendBtn(g.key)}</td></tr>`}).join(""):emptyRow(9,"No customers yet.");
+  $("f-cu").innerHTML=`<tr><td colspan="3">Total cargo receivables</td><td class="r">${C.qty}</td><td class="r">${m(C.ch)}</td><td class="r">${m(C.pd)}</td><td class="r">${m(C.ar)}</td><td>${C.ch?(C.pd/C.ch*100).toFixed(1):"0.0"}%</td><td></td></tr>`;
 }
 function renderCalc(C){
   C=C||calc();
@@ -498,7 +522,45 @@ function closeForm(){$("dlg").close();editing=null}
 $("dlgX").onclick=closeForm;$("dlgCancel").onclick=closeForm;
 document.querySelectorAll("[data-add]").forEach(b=>b.addEventListener("click",()=>{
   if(b.dataset.add==="payments"&&!S.partners.length){toast("Add a partner first");return}openForm(b.dataset.add)}));
-document.addEventListener("click",e=>{const tr=e.target.closest("tr.click");if(tr)openForm(tr.dataset.col,tr.dataset.id)});
+document.addEventListener("click",e=>{const sb=e.target.closest("[data-send]");if(sb){openSend(sb.dataset.send);return}
+  const tr=e.target.closest("tr.click");if(tr)openForm(tr.dataset.col,tr.dataset.id)});
+
+/* send a customer their bill by WhatsApp or text message (opens the app with the message filled in) */
+function sendBtn(key){return `<button type="button" class="btn ghost sm" data-send="${esc(key)}">Send</button>`}
+function waNumber(phone){
+  const raw=String(phone||"").trim();if(!raw)return "";
+  const d=raw.replace(/\D/g,"");
+  if(raw.startsWith("+")||raw.startsWith("00"))return d.replace(/^00/,"");
+  if(d.length===10)return "1"+d;          // US number without country code
+  if(d.length===7)return "220"+d;         // Gambian number without country code
+  return d;
+}
+function billText(g){
+  const cont=CONTS.find(c=>c.id===CUR);
+  const lines=g.rows.map(c=>`• ${c.cargo||"Cargo"}${n(c.qty)?` (${n(c.qty)})`:""}: ${m(c.ch)}`);
+  return [`Hello ${g.name},`,``,`Here is your shipping bill from The Container${cont?` (${cont.name})`:""}:`,``,...lines,``,
+    `Total: ${m(g.ch)}`,`Paid: ${m(g.pd)}`,`Balance due: ${m(g.bal)}`,``,g.bal>0.005?`Please let us know when you can pay the balance. Thank you!`:`You're fully paid. Thank you!`].join("\n");
+}
+function openSend(key){
+  const g=lastGroups.find(x=>x.key===key);if(!g)return;
+  const phone=[...g.rows].reverse().map(r=>r.phone).find(p=>p&&String(p).trim())||"";
+  $("sendTitle").textContent=`Send bill to ${g.name}`;
+  $("sendPhone").value=phone;$("sendMsg").value=billText(g);
+  updateSendLinks();$("sendDlg").showModal();$("sendMsg").focus();
+}
+function updateSendLinks(){
+  const num=waNumber($("sendPhone").value),msg=$("sendMsg").value;
+  const wa=$("sendWa"),sms=$("sendSms"),note=$("sendNote");
+  wa.href=`https://wa.me/${num}?text=${encodeURIComponent(msg)}`;
+  sms.href=`sms:${num?"+"+num:""}?&body=${encodeURIComponent(msg)}`;
+  const ok=!!num;wa.classList.toggle("off",!ok);sms.classList.toggle("off",!ok);
+  note.textContent=ok?`Will send to +${num}. Check the number before you press send.`:"Add a phone number to send by WhatsApp or text. You can still copy the message.";
+}
+$("sendPhone").addEventListener("input",updateSendLinks);$("sendMsg").addEventListener("input",updateSendLinks);
+["sendWa","sendSms"].forEach(id=>$(id).addEventListener("click",e=>{if($(id).classList.contains("off"))e.preventDefault()}));
+$("sendCopy").addEventListener("click",async()=>{const t=$("sendMsg");
+  try{await navigator.clipboard.writeText(t.value);toast("Message copied")}catch(e){t.select();toast("Press Cmd+C (or Ctrl+C) to copy")}});
+$("sendX").onclick=$("sendClose").onclick=()=>$("sendDlg").close();
 
 $("frm").addEventListener("submit",async e=>{
   e.preventDefault();if(!editing)return;
