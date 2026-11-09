@@ -535,11 +535,13 @@ function waNumber(phone){
   if(d.length===7)return "220"+d;         // Gambian number without country code
   return d;
 }
+const ZELLE="saikoukolley98.99@gmail.com";   // where customers send payment
 function billText(g){
-  const cont=CONTS.find(c=>c.id===CUR);
-  const lines=g.rows.map(c=>`• ${c.cargo||"Cargo"}${n(c.qty)?` (${n(c.qty)})`:""}: ${m(c.ch)}`);
-  return [`Hello ${g.name},`,``,`Here is your shipping bill from The Container${cont?` (${cont.name})`:""}:`,``,...lines,``,
-    `Total: ${m(g.ch)}`,`Paid: ${m(g.pd)}`,`Balance due: ${m(g.bal)}`,``,g.bal>0.005?`Please let us know when you can pay the balance. Thank you!`:`You're fully paid. Thank you!`].join("\n");
+  const lines=g.rows.map(c=>`• ${c.cargo||"Cargo"}${n(c.qty)?` (${n(c.qty)})`:""}`);
+  const due=g.bal>0.005;
+  return [`Hello ${g.name},`,``,`Here is your shipping bill from The Container:`,``,...lines,``,
+    `Total: ${m(g.ch)}`,`Paid: ${m(g.pd)}`,`Balance due: ${m(g.bal)}`,``,
+    ...(due?[`Please pay your balance by Zelle to:`,ZELLE,``,`Put your name in the Zelle note so we can match your payment. Thank you!`]:[`You're fully paid. Thank you!`])].join("\n");
 }
 function openSend(key){
   const g=lastGroups.find(x=>x.key===key);if(!g)return;
