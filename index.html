@@ -7,6 +7,8 @@
 <title>The Container</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
 <script src="config.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.4/dist/jspdf.plugin.autotable.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
@@ -303,7 +305,7 @@ label.f textarea{font:400 14px/1.45 var(--sans);color:var(--ink);background:var(
       <div class="kpi"><span class="lbl">Customers</span><span class="val" id="cu-n">—</span><span class="note" id="cu-n-n"></span></div>
     </div>
     <div>
-      <div class="sec-head"><h2>Cargo billing</h2><button class="btn" data-add="customers">Add customer</button></div>
+      <div class="sec-head"><h2>Cargo billing</h2><div class="cbtns"><button class="btn ghost" id="pdfOpen" type="button">Cargo list PDF</button><button class="btn" data-add="customers">Add customer</button></div></div>
       <div class="tbl-wrap"><table>
         <thead><tr><th>Customer</th><th>Phone</th><th>Cargo</th><th class="r">Qty</th><th class="r">Charged</th><th class="r">Paid</th><th class="r">Balance</th><th>Status</th><th><span class="sr">Send bill</span></th></tr></thead>
         <tbody id="t-cu"></tbody><tfoot id="f-cu"></tfoot>
@@ -313,6 +315,15 @@ label.f textarea{font:400 14px/1.45 var(--sans);color:var(--ink);background:var(
   </section>
   </div>
 </div>
+
+<dialog id="pdfDlg">
+  <div class="dlg-head"><h3>Cargo list PDF</h3><button type="button" class="x" id="pdfX" aria-label="Close">×</button></div>
+  <div class="dlg-body"><p class="wide" id="pdfInfo" style="margin:0"></p><p class="hint wide" id="pdfNote" style="margin:0"></p></div>
+  <div class="dlg-foot">
+    <button type="button" class="btn ghost" id="pdfClose">Close</button>
+    <div class="right"><button type="button" class="btn ghost" id="pdfDownload">Download PDF</button><button type="button" class="btn" id="pdfShare" hidden>Share PDF</button></div>
+  </div>
+</dialog>
 
 <dialog id="sendDlg">
   <div class="dlg-head"><h3 id="sendTitle">Send bill</h3><button type="button" class="x" id="sendX" aria-label="Close">×</button></div>
@@ -563,6 +574,44 @@ $("sendPhone").addEventListener("input",updateSendLinks);$("sendMsg").addEventLi
 $("sendCopy").addEventListener("click",async()=>{const t=$("sendMsg");
   try{await navigator.clipboard.writeText(t.value);toast("Message copied")}catch(e){t.select();toast("Press Cmd+C (or Ctrl+C) to copy")}});
 $("sendX").onclick=$("sendClose").onclick=()=>$("sendDlg").close();
+
+/* cargo list PDF for the partner receiving the container: names and items only, no prices or phone numbers */
+function buildCargoPdf(){
+  const {jsPDF}=window.jspdf;const doc=new jsPDF({unit:"pt",format:"a4"});
+  const C=calc();const cont=CONTS.find(c=>c.id===CUR)||{name:"Container"};
+  const W=doc.internal.pageSize.getWidth(),H=doc.internal.pageSize.getHeight();
+  doc.setFont("helvetica","bold");doc.setFontSize(20);doc.setTextColor(18,36,44);doc.text("THE CONTAINER",40,56);
+  doc.setFontSize(13);doc.text(`Cargo list: ${cont.name}`,40,78);
+  doc.setFont("helvetica","normal");doc.setFontSize(10);doc.setTextColor(90,106,113);
+  doc.text([cont.date?`Ship date: ${fmtDate(cont.date)}`:"",`Prepared: ${fmtDate(today())}`,`${C.groups.length} customers, ${C.qty} items`].filter(Boolean).join("     "),40,96);
+  doc.autoTable({startY:112,margin:{left:40,right:40},
+    head:[["#","Customer","Items","Qty","Received"]],
+    body:C.groups.map((g,i)=>[i+1,g.name,g.rows.map(r=>`${r.cargo||"Cargo"}${n(r.qty)?` (${n(r.qty)})`:""}`).join("\n"),g.qty,""]),
+    foot:[["","Total","",C.qty,""]],
+    styles:{font:"helvetica",fontSize:10,cellPadding:6,valign:"top",textColor:[18,36,44],lineColor:[211,218,221],lineWidth:.5},
+    headStyles:{fillColor:[18,36,44],textColor:255,fontStyle:"bold"},
+    footStyles:{fillColor:[233,237,238],textColor:[18,36,44],fontStyle:"bold"},
+    columnStyles:{0:{cellWidth:28,halign:"right"},1:{cellWidth:140,fontStyle:"bold"},3:{cellWidth:40,halign:"right"},4:{cellWidth:62}},
+    didDrawCell:d=>{if(d.section==="body"&&d.column.index===4){doc.setDrawColor(90,106,113);doc.rect(d.cell.x+(d.cell.width-12)/2,d.cell.y+6,12,12)}}});
+  const pages=doc.getNumberOfPages();
+  for(let p=1;p<=pages;p++){doc.setPage(p);doc.setFontSize(9);doc.setTextColor(120);doc.text(`Page ${p} of ${pages}`,W-40,H-24,{align:"right"})}
+  return {doc,name:`Cargo list - ${cont.name}.pdf`.replace(/[\\/:*?"<>|]/g,"-")};
+}
+function canSharePdf(){try{return !!(navigator.canShare&&navigator.canShare({files:[new File(["x"],"x.pdf",{type:"application/pdf"})]}))}catch(e){return false}}
+$("pdfOpen").addEventListener("click",()=>{
+  const C=calc(),cont=CONTS.find(c=>c.id===CUR);const ok=!!(window.jspdf&&window.jspdf.jsPDF);const any=C.groups.length>0;
+  $("pdfInfo").textContent=any?`${cont?cont.name:"This container"}: ${C.groups.length} customers, ${C.qty} items, listed A to Z.`:"There are no customers in this container yet.";
+  $("pdfNote").textContent=!ok?"The PDF tool didn't load. Check your connection and reload the page.":"The PDF shows names and items only. Prices and phone numbers are left out. Each line has a box to tick when the cargo arrives.";
+  $("pdfDownload").disabled=!(ok&&any);$("pdfShare").hidden=!canSharePdf();$("pdfShare").disabled=!(ok&&any);
+  $("pdfDlg").showModal();
+});
+$("pdfDownload").addEventListener("click",()=>{try{const {doc,name}=buildCargoPdf();doc.save(name);toast("PDF downloaded")}catch(e){toast("Couldn't make the PDF. Reload and try again.")}});
+$("pdfShare").addEventListener("click",async()=>{
+  let built;try{built=buildCargoPdf()}catch(e){toast("Couldn't make the PDF. Reload and try again.");return}
+  const file=new File([built.doc.output("blob")],built.name,{type:"application/pdf"});
+  try{await navigator.share({files:[file],title:built.name})}catch(e){if(e&&e.name!=="AbortError"){built.doc.save(built.name);toast("Sharing isn't available, so the PDF was downloaded")}}
+});
+$("pdfX").onclick=$("pdfClose").onclick=()=>$("pdfDlg").close();
 
 $("frm").addEventListener("submit",async e=>{
   e.preventDefault();if(!editing)return;
