@@ -165,6 +165,7 @@ tr.subtot td{background:var(--surface-2);font-weight:600;border-bottom:2px solid
 tr.subtot td.lbl{font-weight:600}
 tr.subtot .cnt{font-weight:400;color:var(--muted);font-size:12.5px}
 td.cont{color:var(--muted);padding-left:24px}
+.neg{color:var(--bad)} .pos{color:var(--good)}
 .btn.sm{padding:4px 10px;font-size:12px}
 a.btn{text-decoration:none;display:inline-flex;align-items:center}
 a.btn.off{opacity:.45;cursor:not-allowed}
@@ -218,7 +219,7 @@ label.f textarea{font:400 14px/1.45 var(--sans);color:var(--ink);background:var(
     <div class="kpis">
       <div class="kpi"><span class="lbl">Total spent</span><span class="val" id="k-total">—</span><span class="note" id="k-total-n"></span></div>
       <div class="kpi"><span class="lbl">Paid in by partners</span><span class="val" id="k-paid">—</span><span class="note" id="k-paid-n"></span></div>
-      <div class="kpi"><span class="lbl">Partners still owe</span><span class="val bad" id="k-owe">—</span><span class="note" id="k-owe-n"></span></div>
+      <div class="kpi"><span class="lbl">Costs not yet covered</span><span class="val bad" id="k-owe">—</span><span class="note" id="k-owe-n"></span></div>
       <div class="kpi"><span class="lbl">Customer balances due</span><span class="val" id="k-ar">—</span><span class="note" id="k-ar-n"></span></div>
     </div>
     <div class="grid2">
@@ -229,7 +230,7 @@ label.f textarea{font:400 14px/1.45 var(--sans);color:var(--ink);background:var(
         </div>
       </div>
       <div>
-        <div class="sec-head"><h2>Partner balances</h2><p>Paid toward each equal share</p></div>
+        <div class="sec-head"><h2>Partner shares</h2><p>Based on what each one contributed</p></div>
         <div class="panel"><div class="partners" id="o-partners"></div></div>
       </div>
     </div>
@@ -266,12 +267,12 @@ label.f textarea{font:400 14px/1.45 var(--sans);color:var(--ink);background:var(
   <!-- PARTNERS -->
   <section class="view" id="v-partners" hidden>
     <div>
-      <div class="sec-head"><h2>Partner equity</h2><button class="btn ghost" data-add="partners">Add partner</button></div>
+      <div class="sec-head"><h2>Partner shares</h2><button class="btn ghost" data-add="partners">Add partner</button></div>
       <div class="tbl-wrap"><table>
-        <thead><tr><th>Partner</th><th class="r">Split</th><th class="r">Target share</th><th class="r">Paid</th><th class="r">Balance</th><th>Status</th></tr></thead>
+        <thead><tr><th>Partner</th><th class="r">Contributed</th><th class="r">Share</th><th class="r">Will have</th><th class="r">Profit / loss</th></tr></thead>
         <tbody id="t-eq"></tbody><tfoot id="f-eq"></tfoot>
       </table></div>
-      <p class="hint">Target share = total expenses × split. Tap a partner to change their name or split.</p>
+      <p class="hint">Share = what a partner contributed ÷ what all partners contributed, so it updates with every logged payment. “Will have” is their share of the money left once every customer has paid and every expense is paid. Any costs partners haven’t covered come out of customer money first. A minus amount means there isn’t enough money and that partner would need to add it. Profit / loss is “Will have” minus what they contributed.</p>
     </div>
     <div>
       <div class="sec-head"><h2>Payments ledger</h2><button class="btn" data-add="payments">Log payment</button></div>
@@ -281,17 +282,17 @@ label.f textarea{font:400 14px/1.45 var(--sans);color:var(--ink);background:var(
       </table></div>
     </div>
     <div>
-      <div class="sec-head"><h2>Next payment planner</h2><p>How much each partner should send if a new expense comes in</p></div>
+      <div class="sec-head"><h2>Next payment planner</h2><p>What each partner would send, based on their current share</p></div>
       <div class="panel">
         <div class="calc">
           <label class="f">Upcoming expense<input id="c-amt" class="num" type="number" min="0" step="0.01" inputmode="decimal"></label>
           <label class="f" style="flex:2 1 280px">What it's for<input id="c-desc" type="text"></label>
         </div>
         <div class="tbl-wrap" style="border:0"><table>
-          <thead><tr><th>Partner</th><th class="r">Share of new expense</th><th class="r">Current balance</th><th class="r">Total to send</th></tr></thead>
+          <thead><tr><th>Partner</th><th class="r">Share of new expense</th><th class="r">Share of uncovered costs</th><th class="r">Total to send</th></tr></thead>
           <tbody id="t-calc"></tbody><tfoot id="f-calc"></tfoot>
         </table></div>
-        <p class="hint">The planner is a what-if. Once the expense is actually billed, add it on the Expenses tab and the balances update on their own.</p>
+        <p class="hint">The planner is a what-if. Once the expense is actually billed, add it on the Expenses tab and the uncovered costs update on their own.</p>
       </div>
     </div>
   </section>
@@ -401,25 +402,30 @@ function calc(){
   const pending=exp.filter(e=>e.status==="Pending").reduce((a,e)=>a+n(e.amount),0);
   const freight=exp.filter(e=>FREIGHT.has(e.category)).reduce((a,e)=>a+n(e.amount),0);
   const cats={};exp.forEach(e=>{const c=e.category||"Other";cats[c]=cats[c]||{paid:0,pend:0};cats[c][e.status==="Pending"?"pend":"paid"]+=n(e.amount)});
-  const splitSum=S.partners.reduce((a,p)=>a+n(p.split),0)||1;
-  const partners=S.partners.map(p=>{const frac=n(p.split)/splitSum;const target=total*frac;
-    const paid=S.payments.filter(x=>x.partner===p.name).reduce((a,x)=>a+n(x.amount),0);
-    return {...p,frac,target,paid,bal:target-paid}});
-  const paidAll=S.payments.reduce((a,x)=>a+n(x.amount),0);
-  const owe=partners.reduce((a,p)=>a+Math.max(0,p.bal),0);
+  /* a partner's share is what they contributed to this container out of everything partners contributed */
+  const base=S.partners.map(p=>({...p,paid:S.payments.filter(x=>x.partner===p.name).reduce((a,x)=>a+n(x.amount),0)}));
+  const paidAll=base.reduce((a,p)=>a+p.paid,0),top=Math.max(0,...base.map(p=>p.paid));
+  const tied=base.filter(p=>p.paid>0&&top-p.paid<0.005).length;
+  const unfunded=Math.max(0,total-paidAll);
   const cu=S.customers.map(c=>{const ch=n(c.charged),pd=n(c.paid);const bal=ch-pd;
     const st=ch>0&&pd>=ch?"Paid":pd>0?"Partial":"Unpaid";return {...c,ch,pd,bal,st}});
   const ch=cu.reduce((a,c)=>a+c.ch,0),pd=cu.reduce((a,c)=>a+c.pd,0);
+  /* left once every customer has paid and every expense is paid; costs partners haven't funded come out of customer money */
+  const left=ch+paidAll-total;
+  const partners=base.map(p=>{const frac=paidAll>0?p.paid/paidAll:0,back=left*frac;
+    return {...p,frac,back,gain:back-p.paid,best:p.paid>0&&top-p.paid<0.005}}).sort((a,b)=>b.paid-a.paid||a.name.localeCompare(b.name));
   /* group entries by customer name (ignoring case and extra spaces), A to Z */
   const gm=new Map();
   [...cu].sort(byCreated).forEach(c=>{const k=custKey(c.name);if(!gm.has(k))gm.set(k,{name:String(c.name||"").trim(),rows:[]});gm.get(k).rows.push(c)});
   const groups=[...gm.values()].map(g=>{const gch=g.rows.reduce((a,c)=>a+c.ch,0),gpd=g.rows.reduce((a,c)=>a+c.pd,0);
     return {...g,key:custKey(g.name),ch:gch,pd:gpd,bal:gch-gpd,qty:g.rows.reduce((a,c)=>a+n(c.qty),0),st:gch>0&&gpd>=gch?"Paid":gpd>0?"Partial":"Unpaid"}})
     .sort((a,b)=>a.name.localeCompare(b.name,undefined,{sensitivity:"base"}));
-  return {total,pending,freight,cats,partners,paidAll,owe,cu,groups,ch,pd,ar:ch-pd,qty:cu.reduce((a,c)=>a+n(c.qty),0)};
+  return {total,pending,freight,cats,partners,paidAll,unfunded,left,tied,cu,groups,ch,pd,ar:ch-pd,qty:cu.reduce((a,c)=>a+n(c.qty),0)};
 }
 function custKey(name){return String(name||"").trim().replace(/\s+/g," ").toLowerCase()}
 const pill=(cls,t)=>`<span class="pill ${cls}">${esc(t)}</span>`;
+const bestPill=(p,C)=>p.best?pill("paid",C.tied>1?"Tied for highest":"Highest share"):"";
+const signed=v=>`<span class="${v<-0.005?"neg":v>0.005?"pos":""}">${Math.abs(v)<0.005?m(0):m(v)}</span>`;
 const emptyRow=(cols,t)=>`<tr class="empty"><td colspan="${cols}">${t}</td></tr>`;
 
 function render(){
@@ -429,8 +435,8 @@ function render(){
   $("k-total-n").textContent=`${S.expenses.length} expenses · ${m(C.pending)} pending`;
   $("k-paid").textContent=m(C.paidAll);
   $("k-paid-n").textContent=C.total?`${Math.round(C.paidAll/C.total*1000)/10}% of total costs`:"";
-  $("k-owe").textContent=m(C.owe);
-  $("k-owe-n").textContent=`across ${C.partners.filter(p=>p.bal>0.005).length} partner(s)`;
+  $("k-owe").textContent=m(C.unfunded);$("k-owe").className="val"+(C.unfunded>0.005?" bad":"");
+  $("k-owe-n").textContent=C.unfunded>0.005?"Total costs minus partner contributions":"Partners have covered all costs";
   $("k-ar").textContent=m(C.ar);$("k-ar").className="val"+(C.ar>0.005?" bad":"");
   $("k-ar-n").textContent=`${C.groups.filter(g=>g.st!=="Paid").length} of ${C.groups.length} customers unpaid or partial`;
   $("o-split").textContent=`Freight & customs ${m(C.freight)} · local logistics ${m(C.total-C.freight)}`;
@@ -440,9 +446,8 @@ function render(){
     return `<div class="bar-row"><span>${esc(k)}</span><span class="amt">${m(t)}</span>
     <div class="bar-track"><div class="bar-fill" style="width:${v.paid/max*100}%"></div><div class="bar-fill pend" style="left:${v.paid/max*100}%;width:${v.pend/max*100}%"></div></div></div>`}).join("")
     :`<p class="hint">No expenses logged yet.</p>`;
-  $("o-partners").innerHTML=C.partners.length?C.partners.map(p=>{const pct=p.target>0?Math.min(100,p.paid/p.target*100):0;
-    return `<div class="pc"><span class="name">${esc(p.name)}</span><span class="owed">${p.bal>0.005?`owes ${m(p.bal)}`:p.bal<-0.005?`over by ${m(-p.bal)}`:"settled"}</span>
-    <div class="meter"><span style="width:${pct}%"></span></div><span class="foot">${m(p.paid)} of ${m(p.target)} · ${Math.round(pct)}%</span></div>`}).join("")
+  $("o-partners").innerHTML=C.partners.length?C.partners.map(p=>`<div class="pc"><span class="name">${esc(p.name)} ${bestPill(p,C)}</span><span class="owed">${(p.frac*100).toFixed(1)}%</span>
+    <div class="meter"><span style="width:${p.frac*100}%"></span></div><span class="foot">${m(p.paid)} contributed</span></div>`).join("")
     :`<p class="hint">No partners yet.</p>`;
   $("n-rev").textContent=m(C.ch);$("n-rev-n").textContent=`${C.groups.length} customers · ${C.qty} items`;
   $("n-col").textContent=m(C.pd);$("n-col-n").textContent=C.ch?`${Math.round(C.pd/C.ch*1000)/10}% collected`:"";
@@ -458,8 +463,8 @@ function render(){
   $("f-cat").innerHTML=`<tr><td colspan="2">Total</td><td class="r">${m(C.total)}</td><td class="r">100.0%</td></tr>`;
 
   /* partners */
-  $("t-eq").innerHTML=C.partners.length?C.partners.map(p=>`<tr class="click" data-col="partners" data-id="${esc(p.id)}"><td>${esc(p.name)}</td><td class="r">${(p.frac*100).toFixed(1)}%</td><td class="r">${m(p.target)}</td><td class="r">${m(p.paid)}</td><td class="r">${m(p.bal)}</td><td>${p.bal>0.005?pill("due","Balance due"):p.bal<-0.005?pill("over","Overpaid"):pill("paid","Settled")}</td></tr>`).join(""):emptyRow(6,"No partners yet.");
-  $("f-eq").innerHTML=`<tr><td>Total</td><td class="r">100.0%</td><td class="r">${m(C.total)}</td><td class="r">${m(C.paidAll)}</td><td class="r">${m(C.total-C.paidAll)}</td><td></td></tr>`;
+  $("t-eq").innerHTML=C.partners.length?C.partners.map(p=>`<tr class="click" data-col="partners" data-id="${esc(p.id)}"><td>${esc(p.name)} ${bestPill(p,C)}</td><td class="r">${m(p.paid)}</td><td class="r">${(p.frac*100).toFixed(1)}%</td><td class="r">${signed(p.back)}</td><td class="r">${signed(p.gain)}</td></tr>`).join(""):emptyRow(5,"No partners yet.");
+  $("f-eq").innerHTML=`<tr><td>Total</td><td class="r">${m(C.paidAll)}</td><td class="r">${C.paidAll>0?"100.0":"0.0"}%</td><td class="r">${signed(C.paidAll>0?C.left:0)}</td><td class="r">${signed(C.paidAll>0?C.left-C.paidAll:0)}</td></tr>`;
   const pays=[...S.payments].sort(byCreated);
   $("t-pay").innerHTML=pays.length?pays.map(x=>`<tr class="click" data-col="payments" data-id="${esc(x.id)}"><td class="dim">${fmtDate(x.date)}</td><td>${esc(x.partner)}</td><td>${esc(x.item)}</td><td class="dim">${esc(x.vendor)}</td><td>${esc(x.category)}</td><td class="r">${m(x.amount)}</td></tr>`).join(""):emptyRow(6,"No partner payments yet.");
   $("f-pay").innerHTML=`<tr><td colspan="5">Total paid by partners · ${pays.length} payments</td><td class="r">${m(C.paidAll)}</td></tr>`;
@@ -479,10 +484,9 @@ function render(){
 function renderCalc(C){
   C=C||calc();
   const amt=n($("c-amt").value);
-  $("t-calc").innerHTML=C.partners.length?C.partners.map(p=>{const share=amt*p.frac;const tot=share+Math.max(0,p.bal);
-    return `<tr><td>${esc(p.name)}</td><td class="r">${m(share)}</td><td class="r">${m(p.bal)}</td><td class="r"><strong>${m(tot)}</strong></td></tr>`}).join(""):emptyRow(4,"Add partners first.");
-  const prior=C.partners.reduce((a,p)=>a+Math.max(0,p.bal),0);
-  $("f-calc").innerHTML=`<tr><td>Total capital needed</td><td class="r">${m(amt)}</td><td class="r">${m(prior)}</td><td class="r">${m(amt+prior)}</td></tr>`;
+  const fr=p=>C.paidAll>0?p.frac:1/C.partners.length;   // equal until someone contributes
+  $("t-calc").innerHTML=C.partners.length?C.partners.map(p=>`<tr><td>${esc(p.name)}</td><td class="r">${m(amt*fr(p))}</td><td class="r">${m(C.unfunded*fr(p))}</td><td class="r"><strong>${m((amt+C.unfunded)*fr(p))}</strong></td></tr>`).join(""):emptyRow(4,"Add partners first.");
+  $("f-calc").innerHTML=`<tr><td>Total capital needed</td><td class="r">${m(amt)}</td><td class="r">${m(C.unfunded)}</td><td class="r">${m(amt+C.unfunded)}</td></tr>`;
 }
 let calcTimer;
 function calcChanged(){renderCalc();if(!ready||!canWrite)return;clearTimeout(calcTimer);
@@ -500,7 +504,7 @@ const F={
   customers:{title:"customer",fields:[
     ["name","Customer name","cust",1],["phone","Phone","text"],["cargo","Cargo / items","text",0,"wide"],
     ["qty","Quantity","int"],["date","Date booked","date"],["charged","Amount charged","money",1],["paid","Amount paid","money"]]},
-  partners:{title:"partner",fields:[["name","Name","text",1],["split","Split weight (%)","money",1]]},
+  partners:{title:"partner",fields:[["name","Name","text",1]]},
   containers:{title:"container",fields:[["name","Container name","text",1,"wide"],["status","Status","select",1,"",["Loading","In transit","Arrived","Closed"]],["date","Ship date","date"]]}
 };
 let editing=null;
@@ -509,7 +513,7 @@ function openForm(col,id){
   const def=F[col];const rec=id?S[col].find(r=>r.id===id):null;editing={col,id:rec?rec.id:null,prevName:rec&&col==="partners"?rec.name:null};
   $("dlgTitle").textContent=(rec?"Edit ":"Add ")+def.title;
   $("dlgBody").innerHTML=def.fields.map(([k,label,type,req,cls,opts])=>{
-    let v=rec?rec[k]:(type==="date"?today():k==="status"?(col==="containers"?"Loading":"Paid"):k==="split"?"33.33":(col==="containers"&&k==="name")?`Container ${CONTS.length+1}`:"");v=v??"";
+    let v=rec?rec[k]:(type==="date"?today():k==="status"?(col==="containers"?"Loading":"Paid"):(col==="containers"&&k==="name")?`Container ${CONTS.length+1}`:"");v=v??"";
     let input;
     if(type==="select")input=`<select id="fld-${k}">${opts.map(o=>`<option${o===v?" selected":""}>${esc(o)}</option>`).join("")}</select>`;
     else if(type==="partner")input=`<select id="fld-${k}">${S.partners.map(p=>`<option${p.name===v?" selected":""}>${esc(p.name)}</option>`).join("")}</select>`;
